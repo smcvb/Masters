@@ -1,11 +1,14 @@
 package types;
+
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
 
-import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.WritableComparable;
+import org.apache.hadoop.io.WritableComparator;
+import org.apache.hadoop.io.WritableUtils;
 
 public class TextLongPair implements WritableComparable<TextLongPair> {
 	
@@ -13,8 +16,8 @@ public class TextLongPair implements WritableComparable<TextLongPair> {
 	private LongWritable docid;
 	
 	public TextLongPair() {
-		this.term = new Text();
-		this.docid = new LongWritable();
+		term = new Text();
+		docid = new LongWritable();
 	}
 	
 	public TextLongPair(Text term, LongWritable docid) {
@@ -26,9 +29,9 @@ public class TextLongPair implements WritableComparable<TextLongPair> {
 		this(new Text(term), new LongWritable(docid));
 	}
 	
-	public void set(TextLongPair pair){
-		this.term = pair.getTerm();
-		this.docid = pair.getDocid();
+	public void set(TextLongPair pair) {
+		term = pair.getTerm();
+		docid = pair.getDocid();
 	}
 	
 	public void set(Text term, LongWritable docid) {
@@ -42,18 +45,29 @@ public class TextLongPair implements WritableComparable<TextLongPair> {
 	}
 	
 	//get-set term Text variable
-	public Text getTerm() { return term; }
-	public void setTerm(String term){ this.term = new Text(term); }
+	public Text getTerm() {
+		return term;
+	}
+	
+	public void setTerm(String term) {
+		this.term = new Text(term);
+	}
 	
 	//get-set docid LongWritable variable
-	public LongWritable getDocid() { return docid; }
-	public void setDocid(long docid){ this.docid = new LongWritable(docid); }
+	public LongWritable getDocid() {
+		return docid;
+	}
+	
+	public void setDocid(long docid) {
+		this.docid = new LongWritable(docid);
+	}
 	
 	@Override
 	public void write(DataOutput out) throws IOException {
 		term.write(out);
 		docid.write(out);
 	}
+	
 	@Override
 	public void readFields(DataInput in) throws IOException {
 		term.readFields(in);
@@ -69,15 +83,19 @@ public class TextLongPair implements WritableComparable<TextLongPair> {
 	
 	@Override
 	public boolean equals(Object o) {
-		if(this == o) 
+		if (this == o) {
 			return true;
-		if(o == null || getClass() != o.getClass())
+		}
+		if (o == null || getClass() != o.getClass()) {
 			return false;
-		TextLongPair tp = (TextLongPair)o;
-		if(term != null ? !term.equals(tp.getTerm()) : tp.getTerm() != null)
+		}
+		TextLongPair tp = (TextLongPair) o;
+		if (term != null ? !term.equals(tp.getTerm()) : tp.getTerm() != null) {
 			return false;
-		if(docid != null ? !docid.equals(tp.getDocid()) : tp.getDocid() != null)
+		}
+		if (docid != null ? !docid.equals(tp.getDocid()) : tp.getDocid() != null) {
 			return false;
+		}
 		return true;
 	}
 	
@@ -85,13 +103,29 @@ public class TextLongPair implements WritableComparable<TextLongPair> {
 	public String toString() {
 		return term + "\t" + docid + " ";
 	}
-
+	
 	@Override
 	public int compareTo(TextLongPair tp) {
-		int cmp = this.term.compareTo(tp.getTerm());
+		int cmp = term.compareTo(tp.getTerm());
 		if (cmp != 0) {
 			return cmp;
 		}
-		return this.docid.compareTo(tp.getDocid());
+		return docid.compareTo(tp.getDocid());
+	}
+	
+	public static class Comparator extends WritableComparator {
+		public Comparator() {
+			super(Text.class);
+		}
+		
+		public int compare(byte[] b1, int s1, int l1, byte[] b2, int s2, int l2) {
+			int n1 = WritableUtils.decodeVIntSize(b1[s1]);
+			int n2 = WritableUtils.decodeVIntSize(b2[s2]);
+			return compareBytes(b1, s1 + n1, l1 - n1, b2, s2 + n2, l2 - n2);
+		}
+	}
+	
+	static { //register this comparator
+		WritableComparator.define(Text.class, new Comparator());
 	}
 }
