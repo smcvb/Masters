@@ -225,7 +225,7 @@ public class InvertedIndex extends Configured implements Tool {
 	 */
 	private Job createJob(Configuration conf, String inputPath, String outputPath, int reduceTasks) throws IOException {
 		conf.set("io.sort.mb", "512");
-		conf.set("mapred.child.java.opts", "-Xmx4096m");//TODO Possible remove
+		conf.set("mapred.child.java.opts", "-Xmx4096m");
 		conf.set("mapred.task.timeout", "0");
 		conf.set("wiki.language", "en");
 		
@@ -241,7 +241,7 @@ public class InvertedIndex extends Configured implements Tool {
 		job.setMapperClass(Map.class); // Class settings
 		job.setSortComparatorClass(SortComparator.class);
 		job.setGroupingComparatorClass(GroupComparator.class);
-		//job.setPartitionerClass(Partition.class);
+		job.setPartitionerClass(Partition.class);
 		job.setReducerClass(Reduce.class);
 		
 		return job;
