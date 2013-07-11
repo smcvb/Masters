@@ -119,20 +119,20 @@ public class InvertedIndex extends Configured implements Tool {
 			super(TextLongPair.class, true);
 		}
 		
-//		@Override
-//		public int compare(byte[] b1, int s1, int l1, byte[] b2, int s2, int l2) {
-//			try {
-//				int firstL1 = WritableUtils.decodeVIntSize(b1[s1]) + readVInt(b1, s1);
-//				int firstL2 = WritableUtils.decodeVIntSize(b2[s2]) + readVInt(b2, s2);
-//				int cmp = TEXT_COMPARATOR.compare(b1, s1, firstL1, b2, s2, firstL2);
-//				if (cmp != 0) {
-//					return cmp;
-//				}
-//				return LONG_COMPARATOR.compare(b1, s1 + firstL1, l1 - firstL1, b2, s2 + firstL2, l2 - firstL2);
-//			} catch (IOException e) {
-//				throw new IllegalArgumentException(e);
-//			}
-//		}
+		@Override
+		public int compare(byte[] b1, int s1, int l1, byte[] b2, int s2, int l2) {
+			try {
+				int firstL1 = WritableUtils.decodeVIntSize(b1[s1]) + readVInt(b1, s1);
+				int firstL2 = WritableUtils.decodeVIntSize(b2[s2]) + readVInt(b2, s2);
+				int cmp = TEXT_COMPARATOR.compare(b1, s1, firstL1, b2, s2, firstL2);
+				if (cmp != 0) {
+					return cmp;
+				}
+				return LONG_COMPARATOR.compare(b1, s1 + firstL1, l1 - firstL1, b2, s2 + firstL2, l2 - firstL2);
+			} catch (IOException e) {
+				throw new IllegalArgumentException(e);
+			}
+		}
 		
 		@Override
 		public int compare(WritableComparable w1, WritableComparable w2) {
@@ -154,10 +154,10 @@ public class InvertedIndex extends Configured implements Tool {
 			super(TextLongPair.class, true);
 		}
 		
-//		@Override
-//		public int compare(byte[] b1, int s1, int l1, byte[] b2, int s2, int l2) {
-//			return TEXTLONGPAIR_COMPARATOR.compare(b1, s1, l1, b2, s2, l2);
-//		}
+		@Override
+		public int compare(byte[] b1, int s1, int l1, byte[] b2, int s2, int l2) {
+			return TEXTLONGPAIR_COMPARATOR.compare(b1, s1, l1, b2, s2, l2);
+		}
 		
 		@Override
 		public int compare(WritableComparable w1, WritableComparable w2) {
@@ -177,11 +177,14 @@ public class InvertedIndex extends Configured implements Tool {
 		}
 	}
 	
-	public static class Reduce extends Reducer<TextLongPair, IntWritable, Text, TextIntPairArrayWritable> {
+	//public static class Reduce extends Reducer<TextLongPair, IntWritable, Text, TextIntPairArrayWritable> { //TODO
+	public static class Reduce extends Reducer<TextLongPair, IntWritable, Text, Text> { //TODO
 		
 		private String currentTerm, previousTerm;
 		private ArrayList<TextIntPair> postingsList;
 		private TextIntPairArrayWritable writablePostings;
+		
+		private String postingsString; //TODO
 		
 		@Override
 		public void setup(Context context) {
@@ -189,30 +192,44 @@ public class InvertedIndex extends Configured implements Tool {
 			previousTerm = null;
 			postingsList = new ArrayList<TextIntPair>();
 			writablePostings = new TextIntPairArrayWritable(TextIntPair.class);
+			
+			postingsString = ""; //TODO
 		}
 		
 		@Override
 		public void reduce(TextLongPair key, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException {
+//			currentTerm = key.getTerm().toString();
+//			if (!currentTerm.equals(previousTerm) && previousTerm != null) { // New term start, write out old term
+//				TextIntPair[] postingsArray = new TextIntPair[postingsList.size()];
+//				postingsArray = postingsList.toArray(postingsArray);
+//				writablePostings.set(postingsArray);
+//				context.write(new Text(previousTerm), writablePostings);
+//				postingsList.clear(); // Empty memory
+//			}
+//			TextIntPair posting = new TextIntPair(new Text(key.getDocid().toString()), new IntWritable(values.iterator().next().get()));
+//			postingsList.add(posting);
+//			previousTerm = currentTerm;
+			
 			currentTerm = key.getTerm().toString();
 			if (!currentTerm.equals(previousTerm) && previousTerm != null) { // New term start, write out old term
-				TextIntPair[] postingsArray = new TextIntPair[postingsList.size()];
-				postingsArray = postingsList.toArray(postingsArray);
-				writablePostings.set(postingsArray);
-				context.write(new Text(previousTerm), writablePostings);
-				postingsList.clear(); // Empty memory
+				context.write(new Text(previousTerm), new Text(postingsString));
+				postingsString = "";
 			}
 			TextIntPair posting = new TextIntPair(new Text(key.getDocid().toString()), new IntWritable(values.iterator().next().get()));
-			postingsList.add(posting);
+			postingsString = postingsString + " " + posting.toString();
 			previousTerm = currentTerm;
 		}
 		
 		@Override
 		public void cleanup(Context context) throws IOException, InterruptedException { //clean last term
-			TextIntPair[] postingsArray = new TextIntPair[postingsList.size()];
-			postingsArray = postingsList.toArray(postingsArray);
-			writablePostings.set(postingsArray);
-			context.write(new Text(currentTerm), writablePostings);
-			postingsList.clear(); // Empty memory
+//			TextIntPair[] postingsArray = new TextIntPair[postingsList.size()];
+//			postingsArray = postingsList.toArray(postingsArray);
+//			writablePostings.set(postingsArray);
+//			context.write(new Text(currentTerm), writablePostings);
+//			postingsList.clear(); // Empty memory
+			
+			context.write(new Text(previousTerm), new Text(postingsString));
+			postingsString = "";
 		}
 	}
 	
@@ -229,7 +246,7 @@ public class InvertedIndex extends Configured implements Tool {
 		conf.set("mapred.task.timeout", "0");
 		conf.set("wiki.language", "en");
 		
-		Job job = new Job(conf, "Inverted Indexing"); // Main settings
+		Job job = new Job(conf, "Inverted Indexing with no ArrayWritable"); // Main settings
 		job.setJarByClass(InvertedIndex.class);
 		job.setNumReduceTasks(reduceTasks);
 		FileInputFormat.setInputPaths(job, new Path(inputPath)); // Input settings
