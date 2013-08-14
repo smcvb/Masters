@@ -1,0 +1,251 @@
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Random;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.conf.Configured;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.util.Tool;
+import org.apache.hadoop.util.ToolRunner;
+import org.apache.hama.HamaConfiguration;
+import org.apache.hama.bsp.BSP;
+import org.apache.hama.bsp.BSPJob;
+import org.apache.hama.bsp.BSPPeer;
+import org.apache.hama.bsp.TextInputFormat;
+import org.apache.hama.bsp.TextOutputFormat;
+import org.apache.hama.bsp.sync.SyncException;
+
+import types.Point;
+import types.PointMessage;
+
+/**
+ * Hama program to run the k-means algorithm
+ * @author stevenb
+ * @date 29-07-2013
+ */
+public class KMeans extends Configured implements Tool {
+	
+	public static final String POINT = "POINT";
+	
+	public static class KMeansBSP extends BSP<LongWritable, Text, Point, Text, PointMessage> {
+		
+		private boolean converged;
+		private int kmeans, round, iterations;
+		private Point mean;
+		private ArrayList<Point> points;
+		private HashMap<String, Point> clusters;
+		
+		@Override
+		public void setup(BSPPeer<LongWritable, Text, Point, Text, PointMessage> peer) throws IOException { //initialize
+			converged = false;
+			kmeans = peer.getNumPeers();
+			round = 0;
+			iterations = peer.getConfiguration().getInt("iterations", 0);
+			mean = null;
+			points = new ArrayList<Point>();
+			clusters = new HashMap<String, Point>();
+		}
+		
+		@Override
+		public void bsp(BSPPeer<LongWritable, Text, Point, Text, PointMessage> peer) throws IOException, InterruptedException, SyncException {
+			if (masterTask(peer)) {
+				initialize(peer);
+			}
+			
+			while (!converged || round < iterations) {
+				peer.sync();
+				converged = receiveMessages(peer);
+				assignPoints(peer);
+				recalculateMean(peer);
+				round++;
+			}
+		}
+		
+		private boolean masterTask(BSPPeer<LongWritable, Text, Point, Text, PointMessage> peer) {
+			if (peer.getPeerIndex() == 0) {
+				return true;
+			}
+			return false;
+		}
+		
+		private void initialize(BSPPeer<LongWritable, Text, Point, Text, PointMessage> peer) throws IOException {
+			LongWritable key = new LongWritable();
+			Text value = new Text();
+			String[] lines = null;
+			
+			while (peer.readNext(key, value)) {
+				lines = value.toString().split("\n");
+				for (int i = 0; i < lines.length; i++) {
+					Random random = new Random();
+					int clusterIndex = random.nextInt(kmeans);
+					Point point = new Point(lines[i]);
+					PointMessage m = new PointMessage(peer.getPeerName(clusterIndex), point);
+					peer.send(peer.getPeerName(clusterIndex), m);
+				}
+			}
+		}
+		
+		private boolean receiveMessages(BSPPeer<LongWritable, Text, Point, Text, PointMessage> peer) throws IOException {
+			int totalPointsReceived = peer.getNumCurrentMessages();
+			Point[] newMeans = new Point[0];
+			
+			for (int i = 0; i < totalPointsReceived; i++) {
+				PointMessage message = peer.getCurrentMessage();
+				String tag = message.getTag();
+				if (tag.equals(POINT)) { // Point assignment message in case it is minus 0
+					points.add(message.getPoint());
+				} else { // Probably a Cluster mean
+				
+				}
+			}
+			
+			return checkConvergence(newMeans);
+		}
+		
+		private boolean checkConvergence(Point[] newMeans) {
+			return true;
+		}
+		
+		private void assignPoints(BSPPeer<LongWritable, Text, Point, Text, PointMessage> peer) throws IOException {
+			// Compute the Euclidean distances between all the point/mean combinations
+			String name = "";
+			double dist = 0.0, minDist = Double.MAX_VALUE;
+			for (int i = 0; i < points.size(); i++) {
+				String[] clusterNames = peer.getAllPeerNames();
+				for (String clusterName : clusterNames) {
+					dist = points.get(i).calculateDistance(clusters.get(clusterName));
+					if (dist < minDist) {
+						minDist = dist;
+						name = clusterName;
+					}
+				}
+				
+				if (!name.equals(peer.getPeerName())) { // If the point did not stay in my cluster, send a message to the correct peer 
+					PointMessage m = new PointMessage(POINT, points.remove(i));
+					peer.send(name, m);
+				}
+			}
+		}
+		
+		private void recalculateMean(BSPPeer<LongWritable, Text, Point, Text, PointMessage> peer) throws IOException {
+			int i = 0;
+			Point newMean = new Point();
+			for (Point point : points) {
+				if (i == 0) {
+					newMean = point;
+				} else {
+					newMean.add(point);
+				}
+				i++;
+			}
+			newMean.divide(i);
+			mean = newMean;
+			
+			broadcastNewMean(peer);
+		}
+		
+		private void broadcastNewMean(BSPPeer<LongWritable, Text, Point, Text, PointMessage> peer) throws IOException {
+			String[] clusterNames = peer.getAllPeerNames();
+			for (String clusterName : clusterNames) {
+				PointMessage m = new PointMessage(peer.getPeerName(), mean);
+				peer.send(clusterName, m);
+			}
+		}
+		
+		@Override
+		public void cleanup(BSPPeer<LongWritable, Text, Point, Text, PointMessage> peer) throws IOException { // Close
+			//write it all out to a file
+			for (Point point : points) {
+				peer.write(mean, new Text(point.toString()));
+			}
+		}
+	}
+	
+	/**
+	 * Create the job.
+	 * @param args: String array of arguments
+	 * @param conf: a HamaConfiguration Object for the BSP job
+	 * @return a finalized BSPJob Object for this BSP job
+	 * @throws IOException for creating the BSP job Object
+	 */
+	public static BSPJob createJob(HamaConfiguration conf, Path inputPath, Path outputPath, int kmeans) throws IOException {
+		BSPJob job = new BSPJob(conf, KMeans.class); // Main settings
+		job.setJobName("KMeans Clustering");
+		job.setBspClass(KMeansBSP.class);
+		job.setNumBspTask(kmeans);
+		job.setInputPath(inputPath); // Input settings
+		job.setInputFormat(TextInputFormat.class);
+		job.setInputKeyClass(LongWritable.class);
+		job.setInputValueClass(Text.class);
+		job.setOutputPath(outputPath); // Output settings
+		job.setOutputFormat(TextOutputFormat.class);
+		job.setOutputKeyClass(Point.class);
+		job.setOutputValueClass(Text.class);
+		
+		return job;
+	}
+	
+	/**
+	 * Prints out the usages of this program in case the user
+	 *  gave incorrect input
+	 * @param numArgs: number of arguments in the String array object
+	 */
+	private int printUsage() {
+		System.out.println("usage:\t <input path> <output path> <k mean points> <number of iterations> <[OPTIONAL] add 'combine' to use inmapper combiner>");
+		ToolRunner.printGenericCommandUsage(System.out);
+		return -1;
+	}
+	
+	@Override
+	/**
+	 * Runs the main program
+	 * 
+	 * @param args: String array of arguments given at start 
+	 * @return -1 in case of error | 0 in case of success
+	 * @throws Exception from the createJob() and the waitForCompletion() methods
+	 */
+	public int run(String[] args) throws Exception {
+		int kmeans = 0, iterations = 0;
+		Path inputPath = null, outputPath = null;
+		HamaConfiguration conf = new HamaConfiguration(getConf());
+		
+		// Set arguments
+		if (args.length < 2) {
+			System.err.println("Error: too few parameters given");
+			return printUsage();
+		}
+		inputPath = new Path(args[0]);
+		outputPath = new Path(args[1]);
+		try {
+			kmeans = Integer.parseInt(args[2]);
+			conf.setInt("kmeans", kmeans);
+			iterations = Integer.parseInt(args[3]);
+			conf.setInt("iterations", iterations);
+		} catch (NumberFormatException e) {
+			System.err.println("Error: expected Integers instead of " + args[2] + " (arg 2) and " + args[3] + " (arg 3)");
+			return printUsage();
+		}
+		if (args.length > 4 && args[4].equals("combine")) {
+			conf.setBoolean("combine", true);
+		}
+		else {
+			conf.setBoolean("combine", false);
+		}
+		
+		// Create and start a job
+		BSPJob job = createJob(conf, inputPath, outputPath, kmeans);
+		long startTime = System.currentTimeMillis();
+		if (job.waitForCompletion(true)) {
+			System.out.println("Job Finished in " + (System.currentTimeMillis() - startTime) / 1000.0 + " seconds");
+		}
+		return 0;
+	}
+	
+	public static void main(String[] args) throws Exception {
+		int result = ToolRunner.run(new Configuration(), new InvertedIndex(), args);
+		System.exit(result);
+	}
+}

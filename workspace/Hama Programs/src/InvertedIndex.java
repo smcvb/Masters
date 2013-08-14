@@ -31,7 +31,7 @@ import cloud9.language.WikipediaPageFactory;
  * Hama program to run the Inverted Indexing algorithm as
  *  specified in 'Data-Intensive Text Processing with MapReduce'
  * @author stevenb
- * @date 10-07-2013
+ * @date 15-07-2013
  */
 public class InvertedIndex extends Configured implements Tool {
 	
@@ -189,6 +189,7 @@ public class InvertedIndex extends Configured implements Tool {
 	
 	private int printUsage() {
 		System.out.println("usage:\t <input path> <output path> <number of tasks [default = 27]>");
+		ToolRunner.printGenericCommandUsage(System.out);
 		return -1;
 	}
 	

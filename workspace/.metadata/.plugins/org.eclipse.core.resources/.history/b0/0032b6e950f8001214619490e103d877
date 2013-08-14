@@ -1,0 +1,18 @@
+package types;
+
+
+public class PointMessage {
+	
+	private int type;
+	private Point point;
+	
+	public PointMessage(int type, Point point){
+		
+	}
+	
+	public PointMessage(){
+		
+	}
+	
+	
+}

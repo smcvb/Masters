@@ -1,0 +1,39 @@
+package nl.vu.cs.cn.test;
+
+import nl.vu.cs.cn.TCP_Gerben;
+import nl.vu.cs.cn.TCP_Gerben.Socket;
+
+import junit.framework.TestCase;
+
+public class TCPTest extends TestCase {
+
+	public static final int PORT = 1234;
+	private TCP_Gerben tcp;
+	private Socket sock;
+
+	@Override
+	protected void setUp() throws Exception {
+		super.setUp();
+
+		tcp = new TCP_Gerben(100);
+		sock = tcp.socket(PORT);
+	} // end of setUp() method definition
+
+	public void testPreConditions() {
+		assertTrue(tcp != null);
+		assertTrue(sock != null);
+		assertEquals(sock.gimmePort(), 1234);
+	}
+
+
+	public void testGimme() {
+		assertTrue(1 == 1);
+	}
+
+	protected void tearDown() throws Exception {
+		super.tearDown();
+
+		tcp = null;
+		System.out.printf("tcp == null: %b", tcp == null);
+	}
+}

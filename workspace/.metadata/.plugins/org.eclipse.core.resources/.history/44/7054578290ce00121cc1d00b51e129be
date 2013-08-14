@@ -1,0 +1,133 @@
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FSDataInputStream;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.ArrayWritable;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
+
+import types.TextArrayWritable;
+import cloud9.WikipediaPage;
+import cloud9.WikipediaPageInputFormat;
+
+public class WikipediaGraphParser {
+	public static class Map extends Mapper<LongWritable, WikipediaPage, Text, TextArrayWritable> {
+		
+		private HashMap<String, Long> title_docidMap;
+		
+		@Override
+		public void setup(Context context) {
+			System.out.printf("Trying to read title-docidMapping...\n");
+			loadTitleDocidMapping(context);
+			System.out.printf("Title-docidMapping red!\n");
+		}
+		
+		private void loadTitleDocidMapping(Context context) {
+			long counter = 0;
+			FSDataInputStream in = null;
+			BufferedReader br = null;
+			try {
+				FileSystem fs = FileSystem.get(context.getConfiguration());
+				Path path = new Path(context.getConfiguration().get("mapping.path"));
+				in = fs.open(path);
+				br = new BufferedReader(new InputStreamReader(in));
+			} catch (FileNotFoundException e1) {
+				e1.printStackTrace();
+				System.out.println("read from distributed cache: file not found!");
+			} catch (IOException e1) {
+				e1.printStackTrace();
+				System.out.println("read from distributed cache: IO exception!");
+			}
+			try {
+				title_docidMap = new HashMap<String, Long>();
+				String line = "";
+				while ((line = br.readLine()) != null) {
+					String[] arr = line.split("\t");
+					if (arr.length == 2) {
+						context.getCounter().increment(1);
+					    context.progress();
+						title_docidMap.put(arr[0], Long.parseLong(arr[1]));
+					}
+				}
+				in.close();
+			} catch (IOException e1) {
+				e1.printStackTrace();
+				System.out.println("read from distributed cache: read length and instances");
+			}
+		}
+		
+		@Override
+		public void map(LongWritable key, WikipediaPage value, Context context) throws IOException, InterruptedException {
+			if (value.isEmpty()) {
+				return;
+			}
+			Text docid = new Text(value.getDocid() + " 1");
+			List<String> linksList = value.extractLinkDestinations();
+			Text[] linksArray = new Text[linksList.size()];
+			Iterator<String> linkIterator = linksList.iterator();
+			int location = 0;
+			
+			System.out.printf("TITLE: %s ACTUAL_OUTPUT: %s ", value.getTitle(), docid.toString());//TODO TEST PRINTS remove
+			while (linkIterator.hasNext()) {
+				String link = linkIterator.next();
+				System.out.printf("%s ", link);//TODO TEST PRINTS remove
+				linksArray[location] = new Text(link);
+				location++;
+			}
+			System.out.printf("\n");//TODO TEST PRINTS remove
+			
+			TextArrayWritable links = new TextArrayWritable(Text.class);
+			links.set(linksArray);
+			context.write(docid, links);
+		}
+	}
+	
+	public static void printUsage(int argLength) {
+		if (argLength < 3) {
+			System.out.println("usage:\t <input path> <output path> <title-docid mapping path>");
+			System.exit(-1);
+		}
+	}
+	
+	public static Job createJob(String[] args, Configuration conf) throws IOException {
+		printUsage(args.length);
+		conf.set("wiki.language", "en");
+		conf.set("mapping.path", args[2]);
+		
+		Job job = new Job(conf, "Wikipedia Graph Parser");
+		job.setJarByClass(WikipediaGraphParser.class);
+		FileInputFormat.setInputPaths(job, new Path(args[0])); //Input settings
+		job.setInputFormatClass(WikipediaPageInputFormat.class);
+		FileOutputFormat.setOutputPath(job, new Path(args[1])); //Ouput settings
+		job.setOutputFormatClass(TextOutputFormat.class);
+		job.setOutputKeyClass(Text.class);
+		job.setOutputValueClass(ArrayWritable.class);
+		job.setMapperClass(Map.class); //Class settings
+		job.setNumReduceTasks(0); //If set to zero, Reducer is ignored and Mapper will be the output
+		
+		return job;
+	}
+	
+	public static void main(String[] args) throws Exception {
+		Configuration conf = new Configuration();
+		Job job = createJob(args, conf);
+		
+		long startTime = System.currentTimeMillis();
+		if (job.waitForCompletion(true)) {
+			System.out.println("Job Finished in " + (System.currentTimeMillis() - startTime) / 1000.0 + " seconds");
+		}
+	}
+}

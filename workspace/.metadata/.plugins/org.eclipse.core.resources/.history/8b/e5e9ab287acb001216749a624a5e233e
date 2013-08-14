@@ -1,0 +1,64 @@
+package nl.vu.cs.cn;
+
+/**
+ * @author Steven van Beelen, 1821806
+ *
+ * This class serves as the TCP header part of
+ * 	a TCP segment.
+ * Thus, it holds al the information a TCP Header should have
+ * 	following from the known specification.
+ */
+public class TcpHeader{
+	
+	public short 	srcPort;
+	public short 	dstPort;
+	public int 		seq_nr;
+	public int 		ack_nr;
+	public byte 	data_offset;
+	public byte 	flags;
+    public short 	windowSize;
+    public short 	checksum;
+    public short 	urg_pointer;
+    
+    /**
+     * Construct a TCP Header
+     * 
+     * @param srcPort: The source port number of this packet
+     * @param dstPort: The destination port number of this packet
+     * @param seq_nr: The sequence number of this packet
+     * @param ack_nr: The acknowledgement number of this packet
+     * @param data_offset: The data offset of were the data begins in this packet
+     * @param flags: The flags set for this packet
+     * @param windowSize: The windowsize for this packet (not used)
+     * @param checksum: The checksum computed for this packet
+     * @param urg_pointer: The pointer for the urgent data of this packet (not used)
+     */
+    public TcpHeader(short srcPort, short dstPort,int seq_nr, int ack_nr,byte data_offset, byte flags,
+    		short windowSize, short checksum, short urg_pointer){
+    	this.srcPort 		= srcPort;
+		this.dstPort 		= dstPort;
+		this.seq_nr 		= seq_nr;
+		this.ack_nr 		= ack_nr;
+		this.data_offset 	= data_offset;
+		this.flags 			= flags;
+        this.windowSize 	= windowSize;
+        this.checksum 		= checksum;
+        this.urg_pointer 	= urg_pointer;
+	}
+	
+    /**
+     * Default TCP Header constructor
+     */
+	public TcpHeader(){
+		this((short)0, (short)0, 0, 0, (byte)0, (byte)0, (short)0, (short)0, (short)0);
+	}
+    
+	/**
+	 * @return the number of bytes as an integer of this tcp header
+	 */
+    public int length(){
+       	return (new Short(srcPort).SIZE/8 + new Short(dstPort).SIZE/8 + new Integer(seq_nr).SIZE/8 + 
+       		new Integer(ack_nr).SIZE/8 + new Byte(data_offset).SIZE/8 + new Byte(flags).SIZE/8 + 
+       		new Short(windowSize).SIZE/8 + new Short(checksum).SIZE/8 + new Short(urg_pointer).SIZE/8);
+    }
+}

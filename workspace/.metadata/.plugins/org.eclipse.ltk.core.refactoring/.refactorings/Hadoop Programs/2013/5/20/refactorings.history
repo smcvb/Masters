@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">
+<refactoring comment="Copy package &apos;types&apos; to &apos;Hama Programs/src&apos;&#x0A;- Original project: &apos;Hadoop Programs&apos;&#x0A;- Destination element: &apos;Hama Programs/src&apos;&#x0A;- Original element: &apos;Hadoop Programs/src/types&apos;" description="Copy package" destination="=Hama Programs/src" element1="/src&lt;types" flags="589830" fragments="1" id="org.eclipse.jdt.ui.copy" policy="org.eclipse.jdt.ui.copyPackages" stamp="1368703495874" version="1.0"/>
+</session>

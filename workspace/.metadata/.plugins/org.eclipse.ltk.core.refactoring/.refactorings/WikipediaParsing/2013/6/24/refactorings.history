@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">
+<refactoring comment="Copy element &apos;TextArrayWritable.java&apos; to &apos;types.TextArrayWritable.java&apos;&#x0A;- Original project: &apos;WikipediaGraphParser&apos;&#x0A;- Destination element: &apos;types.TextArrayWritable.java&apos;&#x0A;- Original element: &apos;types.TextArrayWritable.java&apos;" description="Copy compilation unit" destination="/src&lt;types{TextArrayWritable.java" element1="/src&lt;types{TextArrayWritable.java" files="0" flags="589830" folders="0" id="org.eclipse.jdt.ui.copy" policy="org.eclipse.jdt.ui.copyResources" stamp="1370960557385" units="1" version="1.0"/>
+</session>

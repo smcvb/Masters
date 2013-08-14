@@ -1,0 +1,19 @@
+package types;
+
+
+public class PointMessage implements WritableComparable<PointMessage>{
+	
+	private int type;
+	private Point point;
+	
+	public PointMessage(int type, Point point){
+		this.type = type;
+		this.point = point;
+	}
+	
+	public PointMessage(){
+		this(0, null);
+	}
+	
+	
+}

@@ -1,0 +1,542 @@
+package nl.vu.cs.cn;
+
+import java.io.IOException;
+import java.io.ObjectOutputStream;
+import java.io.ByteArrayOutputStream;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+
+import nl.vu.cs.cn.IP.IpAddress;
+import nl.vu.cs.cn.IP.Packet;
+
+/**
+ * This class represents a TCP stack. It should be built on top of the IP stack
+ * which is bound to a given IP address.
+ */
+public class TCP {
+	
+	public static final int TIMEOUT = 240; //Seconds
+	
+	/** 
+	 * The underlying IP stack for this TCP stack. 
+	 */
+	private IP ip;
+	private TCB tcb;
+	
+    /**
+     * This class represents a TCP socket.
+     *
+     */
+	public class Socket {
+		//Steven: De application/client roept de socket aan, de socket het tcp protocol en het tcp protocol het ip protocol
+		
+		/* Hint: You probably need some socket specific data. */
+		public static final byte FIN = 1, SYN = 2, RST = 4, PUSH = 8, ACK = 16, URG = 32;
+		public static final int DEFAULT_PORT = 12345;
+		
+		private IpAddress 	dest; 	//IP address of the machine to connect to
+		private IpAddress 	src; 	//IP address of the interface to accept on. This may be zero in which case the implementation should select an interface
+		private int 		port; 	//port to connect to
+		private byte[] 		buf; 	//the data buffer to be read or written
+		private int 		offset; //the offset within buf to operate on
+		private int 		maxlen; //the maximal amount of data to receive
+		private int 		len;	//the amount of data sent
+		
+		/**
+		 * Construct a client socket.
+		 */
+		private Socket() {
+			port = DEFAULT_PORT;
+		}
+		
+    	/**
+    	 * Construct a server socket bound to the given local port.
+    	 *
+    	 * @param port the local port to use
+    	 */
+		private Socket(int port) {
+			this.port = port;
+		}
+		
+		/**
+		 * Connect this socket to the specified destination and port.
+         *
+         * @param dst the destination to connect to
+         * @param port the port to connect to
+         * @return true if the connect succeeded.
+         */
+	 	public boolean connect(IpAddress dst, int port) {
+			
+			// Implement the connection side of the three-way handshake here.
+        	ip.getLocalAddress();
+			
+			return false;
+        }
+		
+        /**
+         * Accept a connection on this socket.
+         * This call blocks until a connection is made.
+         */
+	 	public void accept() {
+			
+			// Implement the receive side of the three-way handshake here.
+			
+        }
+		
+        /**
+         * Reads bytes from the socket into the buffer.
+         * This call is not required to return maxlen bytes
+         * every time it returns.
+         *
+         * @param buf the buffer to read into
+         * @param offset the offset to begin reading data into
+         * @param maxlen the maximum number of bytes to read
+         * @return the number of bytes read, or -1 if an error occurs.
+         */
+	 	public int read(byte[] buf, int offset, int maxlen) {
+	    	TcpSegment 	s 			= new TcpSegment();
+	    	int 		bytesRead 	= recv_tcp_packet(s);
+	    	if(bytesRead < 0)
+	    		return -1;
+	 		try{
+	 			System.arraycopy(s.data, 0, buf, offset, maxlen);
+	 		} catch(IndexOutOfBoundsException e1){
+	 			e1.printStackTrace();
+	 			return -1;
+	 		} catch(ArrayStoreException e2){
+	 			e2.printStackTrace();
+	 			return -1;
+	 		} catch(NullPointerException e3){
+	 			e3.printStackTrace();
+	 			return -1;
+	 		}
+	 		//sendAck();?
+	 		return bytesRead;
+		}
+		
+        /**
+         * Writes to the socket from the buffer.
+         *
+         * @param buf the buffer to
+         * @param offset the offset to begin writing data from
+         * @param len the number of bytes to write
+         * @return the number of bytes written or -1 if an error occurs.
+         */
+	 	public int write(byte[] buf, int offset, int len) {
+			byte 	flags;
+        	byte[] 	data 				= new byte[TCB.BUF_SIZE];
+        	int 	bytesSend 			= 0,
+        			bytesAcquiredToSend = len;
+			
+			/** Looping through the array until all maximum sized packets have been send */
+			while(len > TCB.BUF_SIZE){
+				len 		-= TCB.BUF_SIZE;
+				System.arraycopy(buf, offset, data, 0, TCB.BUF_SIZE);
+				offset 		+= TCB.BUF_SIZE;
+				bytesSend 	+= send_tcp_packet(tcb.getDestIPAddr(), tcb.getSrcPort(), tcb.getDestPort(), tcb.getSrcSeqNum(), 
+        						tcb.getSrcExpectedAck(), flags, data, data.length) > 0);
+        		//readAck();?
+        	}
+	        
+			/** To make sure all bytes given to write were send */
+        	if(len > 0){
+				System.arraycopy(buf, offset, data, 0, len);
+				bytesSend += send_tcp_packet(tcb.getDestIPAddr(), tcb.getSrcPort(), tcb.getDestPort(), tcb.getSrcSeqNum(), 
+        					tcb.getSrcExpectedAck(), flags, data, data.length) > 0);
+        	}
+	        
+        	/** */
+        	if(bytesAcquiredToSend == bytesSend){
+        		return bytesSend;
+        	}
+			return -1;
+			//Ik loop wel mooi hier, maar weet niet of dat wel hier moet
+		}
+		
+        /**
+         * Closes the connection for this socket.
+         * Blocks until the connection is closed.
+         *
+         * @return true unless no connection was open.
+         */
+	 	public boolean close() {
+			// Close the socket cleanly here.
+			
+			return false;
+		}
+	}
+    	
+    //Steven: Seperate class?
+	private class TcpSegment{
+		
+       	TcpHeader 	tcpHeader;
+       	byte[] 		data;
+       	
+       	public TcpSegment(TcpHeader tcpHeader,byte[] data){
+       		this.tcpHeader 	= tcpHeader;
+       		this.data 		= data;
+       	}
+       	
+       	public TcpSegment(){
+       		this(new TcpHeader(), null);
+       	}
+       	
+       	/** 
+       	 * @return the number of bytes as an integer of the tcp segment
+       	 */
+       	public int length(){
+        	return tcpHeader.length() + data.length;
+        }
+		
+       	/**
+       	 * Computes and sets the checksum for this tcp segment
+       	 * 
+       	 * @param ps: PseudoHeader used to compute the checksum
+       	 * @return returns the computed checksum as a short
+       	 */
+		public short computeChecksum(PseudoHeader ph){
+			byte[]		ph_byte_array	= ph.getByteArray(),
+						tcp_byte_array 	= getByteArray();
+			ByteBuffer 	bb				= ByteBuffer.allocate(2);
+			bb.put(ph_byte_array[0]);
+			bb.put(ph_byte_array[1]);
+    		short 		checksum 		= bb.getShort();
+    		
+    		/** Loop to add all 16bit words (shorts) together from the pseudoheader */
+    		for(int i = 2; i < ph_byte_array.length; i += 2){
+    			bb.put(ph_byte_array[i]);
+    			bb.put(ph_byte_array[i+1]);
+    			checksum += bb.getShort();
+    		}
+    		
+    		/** Loop to add all 16bit words (shorts) together from the tcp segment */
+    		for(int i = 2; i < tcp_byte_array.length; i += 2){
+    			bb.put(tcp_byte_array[i]);
+    			bb.put(tcp_byte_array[i+1]);
+    			checksum += bb.getShort();
+    		}
+    		
+    		/** '~' used to retrieve the complement of checksum */
+    		return (short)~checksum;
+    		
+		}
+		
+		/**
+		 * validates the checksum of an incoming packet
+		 * 
+		 * @return 	True: Checksum is correct
+		 * 			False: Checksum is incorrect
+		 */
+		public boolean validateChecksum(PseudoHeader ph){
+			if(computeChecksum(ph) == 0)
+				return true;
+			return false;
+		}
+        
+		/**
+		 * @return returns a byte array from this tcp segment
+		 */
+		public byte[] getByteArray() throws java.io.IOException{
+        	byte[] 					header,	segment;
+            ByteArrayOutputStream 	byteStream 		= new ByteArrayOutputStream();
+            ObjectOutputStream 		objectStream 	= new ObjectOutputStream(byteStream);
+        
+            objectStream.writeObject(tcpHeader);
+        	objectStream.flush();
+        	objectStream.close();
+        	byteStream.close();
+        	
+        	header 	= byteStream.toByteArray();
+        	segment = new byte[header.length + data.length];
+        	System.arraycopy(header, 0, segment, 0, header.length);
+        	System.arraycopy(data, 0, segment, header.length, data.length);
+        	
+        	return segment;
+        }
+		
+		/**
+		 * Sets the checksum
+		 * 
+		 * @param checksum: the checksum calculated for 
+		 * 	the complete packet (pseudoheader + tcpheader + data)
+		 */
+		public void setChecksum(short checksum){
+			tcpHeader.checksum = checksum;
+		}
+    }
+        
+	//Steven: Seperate class?
+    private class PseudoHeader{
+    	public IpAddress 	src;
+    	public IpAddress 	dst;
+    	public short 		zero;
+    	public short 		ptcl;
+    	public int 			tcp_length;
+    	
+    	public PseudoHeader(IpAddress src, IpAddress dst, short zero, short ptcl, int tcp_length){
+			this.src 		= src;
+			this.dst 		= dst;
+			this.zero 		= zero;
+			this.ptcl 		= ptcl;
+			this.tcp_length = tcp_length;
+		}
+    	
+    	/**
+		 * @return returns a byte array from this pseudoheader
+		 */
+    	public byte[] getByteArray(){
+            ByteArrayOutputStream 	byteStream 		= null;
+            ObjectOutputStream 		objectStream 	= null;
+            try{
+            	byteStream 		= new ByteArrayOutputStream();
+                objectStream 	= new ObjectOutputStream(byteStream);
+            	objectStream.writeObject(src);
+            	objectStream.writeObject(dst);
+            	objectStream.writeObject(zero);
+            	objectStream.writeObject(ptcl);
+            	objectStream.writeObject(tcp_length);
+            	objectStream.flush();
+            	objectStream.close();
+            	byteStream.close();
+            } catch(IOException e1){
+            	e1.printStackTrace();
+            }
+            
+        	return byteStream.toByteArray();
+    	}
+    }
+	
+	//Steven: Seperate class?
+	private class TcpHeader{
+		public short 	srcPort;
+		public short 	dstPort;
+		public int 		seq_nr;
+		public int 		ack_nr;
+		public byte 	data_offset;
+		public byte 	flags;
+        public short 	windowSize;
+        public short 	checksum;
+        public short 	urg_pointer;
+    	
+		public TcpHeader(short srcPort, short dstPort,int seq_nr, int ack_nr,byte data_offset, byte flags,
+        			short windowSize, short checksum, short urg_pointer){
+    		this.srcPort 		= srcPort;
+			this.dstPort 		= dstPort;
+			this.seq_nr 		= seq_nr;
+			this.ack_nr 		= ack_nr;
+			this.data_offset 	= data_offset;
+			this.flags 			= flags;
+        	this.windowSize 	= windowSize;
+        	this.checksum 		= checksum;
+        	this.urg_pointer 	= urg_pointer;
+		}
+		
+		public TcpHeader(){
+			this((short)0, (short)0, 0, 0, (byte)0, (byte)0, (short)0, (short)0, (short)0);
+		}
+    	
+		/**
+		 * @return the number of bytes as an integer of this tcp header
+		 */
+    	public int length(){
+        	return (new Short(srcPort).SIZE/8 + new Short(dstPort).SIZE/8 + new Integer(seq_nr).SIZE/8 + 
+        		new Integer(ack_nr).SIZE/8 + new Byte(data_offset).SIZE/8 + new Byte(flags).SIZE/8 + 
+        		new Short(windowSize).SIZE/8 + new Short(checksum).SIZE/8 + new Short(urg_pointer).SIZE/8);
+        }
+	}
+	
+	/**
+	* Constructs a TCP stack for the given virtual address.
+	* The virtual address for this TCP stack is then
+	* 192.168.1.address.
+	*
+	* @param address The last octet of the virtual IP address 1-254.
+	* @throws IOException if the IP stack fails to initialize.
+	*/
+	public TCP(int address) throws IOException {
+		ip = new IP(address);
+	}
+	
+	/**
+	* @return a new socket for this stack
+	*/
+	public Socket socket() {
+		return new Socket();
+	}
+	
+	/**
+	* @return a new server socket for this stack bound to the given port
+	* @param port the port to bind the socket to.
+	*/
+	public Socket socket(int port) {
+		return new Socket(port);
+	}
+	
+	/**
+	* Used to open a connection
+	* @param type can be passive:True or active:False
+	*/
+	public void open_tcp_connection(boolean type){
+		Socket s = null;
+		if(type){
+			s = socket(4242);
+			s.accept();
+		} else {
+			s = socket();
+			s.connect(ip.getLocalAddress(), 4242);
+		}
+	}
+	
+	/**
+	 * Method used to close the current connection
+	 */
+	public void close_tcp_connection(){
+		
+	}
+	
+	/**
+	 * Method used to send a tcp packet
+	 * 
+	 * @return number of bytes send
+	 * 	-1 returned if error occured
+	 * @param dst: the destination IpAddress
+	 * 	srcPort: port from which the packet comes
+	 * 	dstPort: port were the packet will go to
+	 * 	seq_nr: ...(misschien overbodig/moet misschien anders
+	 */
+	private int send_tcp_packet(IpAddress dst, short srcPort, short dstPort,
+			int seq_nr, int ack_nr,byte flags,short windowSize, byte[] data, int data_size){
+        int 	numBytesSent;
+        short 	checksum 	= 0;
+        short 	urg_pointer = 0;
+        byte 	dataOffSet 	= 0x20;
+        
+        TcpHeader tcpHead 	= new TcpHeader(srcPort, dstPort, seq_nr, ack_nr, dataOffSet, flags, windowSize, checksum, urg_pointer);
+        tcpHead.data_offset = (byte)(tcpHead.length());
+        TcpSegment tcpSeg 	= new TcpSegment(tcpHead,data);
+        PseudoHeader ph		= new PseudoHeader(ip.getLocalAddress(), dst, (short)0, (short)IP.TCP_PROTOCOL, tcpSeg.length());
+        tcpSeg.setChecksum(tcpSeg.computeChecksum(ph));//Steven: Moet over t gehele segment, want over de header En data word een checksum over gedaan
+        
+        Packet p = null;
+		try {
+			p = new Packet(dst.getAddress(), IP.TCP_PROTOCOL, 2/*Shouldn't this be random/sequence?*/, tcpSeg.getByteArray(), tcpSeg.length());
+		} catch (IOException e1) {
+			e1.printStackTrace();
+		}
+		
+		try{
+        	numBytesSent = ip.ip_send(p);
+        } catch(IOException e){
+        	//If an IOException occurs return -1;
+        	numBytesSent = -1;
+        }
+        return numBytesSent;// REMINDER: niet vergeten te checken of numBytesSent -1 retourneert in methode "write"!!!!
+    }
+    
+	/**
+	 * Method which unwraps an incoming IP packet 
+	 * 	to a tcp segment
+	 * 
+	 * @param p: the incoming packet p to be unwrapped
+	 * 	length: length of the entire data segment.
+	 * @return a TcpSegment based on the packet P
+	 */
+	private TcpSegment unwrappingPacket(Packet p, int length){
+		ByteBuffer shortBuffer = ByteBuffer.allocate(2);
+		shortBuffer.order(ByteOrder.BIG_ENDIAN);
+		ByteBuffer intBuffer = ByteBuffer.allocate(4);
+		intBuffer.order(ByteOrder.BIG_ENDIAN);
+		
+		shortBuffer.put(p.data[1]);
+		shortBuffer.put(p.data[2]);
+		short 	srcPort 	= shortBuffer.getShort();
+		shortBuffer.put(p.data[3]);
+		shortBuffer.put(p.data[4]);
+		short 	dstPort 	= shortBuffer.getShort();
+		intBuffer.put(p.data[5]);
+		intBuffer.put(p.data[6]);
+		intBuffer.put(p.data[7]);
+		intBuffer.put(p.data[8]);
+		int 	seq_nr 		= intBuffer.getInt();
+		intBuffer.put(p.data[9]);
+		intBuffer.put(p.data[10]);
+		intBuffer.put(p.data[11]);
+		intBuffer.put(p.data[12]);
+		int 	ack_nr		= intBuffer.getInt();
+		byte 	data_offset = p.data[13];
+		byte 	flags 		= p.data[14];
+		shortBuffer.put(p.data[15]);
+		shortBuffer.put(p.data[16]);
+        short 	windowSize 	= shortBuffer.getShort();
+        shortBuffer.put(p.data[17]);
+		shortBuffer.put(p.data[18]);
+        short 	checksum 	= shortBuffer.getShort();
+        shortBuffer.put(p.data[19]);
+		shortBuffer.put(p.data[20]);
+        short 	urg_pointer = shortBuffer.getShort();
+        byte[] 	data		= new byte[length - 20];
+        System.arraycopy(p.data, 21, data, 0, length);
+		
+		return new TcpSegment(new TcpHeader(srcPort, dstPort, seq_nr, ack_nr, 
+				data_offset, flags, windowSize, checksum, urg_pointer), data);
+	}
+	
+	/** 
+	 * Used to verify if the packet came from
+	 * 	the correct destination and is from the
+	 * 	TCP protocol
+	 * 
+	 * @param p: packet to be verified
+	 * @return true: packet was correct
+	 * 	false: packet was incorrect
+	 */
+	private boolean verifyPacket(Packet p){
+    	if(tcb.dest_ip_addr == null){
+    		tcb.dest_ip_addr = IP.IpAddress(p.destination);
+    	} else if(tcb.dest_ip_addr.getAddress() != p.destination){
+    		return false; 
+    	}
+    	if(p.protocol != IP.TCP_PROTOCOL)
+    		return false;
+    	return true;
+	}
+	
+    /**
+	 * Method used to receive a tcp packet from the ip layer
+	 * 
+	 * @return the number of bytes read
+	 * 	-1 if an error occured or faulty packet was received
+     */
+    private int recv_tcp_packet(TcpSegment s){
+    	/** Initial empty packet to store incoming packet */
+    	Packet p = null;
+    	try {
+    		p = new Packet(null, null, null, null, null);
+    	} catch (IOException e1){
+    		e1.printStackTrace();
+    	}
+    	
+    	//Steven: Which of the two and how?
+    	try {//this one
+    		ip.ip_receive(p);
+    	} catch(IOException e2){
+    		e2.printStrackTrace();
+    		return -1;
+    	}
+    	try {//or this one
+    		ip.ip_receive_timeout(p, TIMEOUT);
+    	} catch(IOException e3){
+    		e3.printStrackTrace();
+    		return -1;
+    	}
+    	
+    	if(!verifyPacket(p))
+    		return -1;
+    	
+    	s = unwrappingPacket(p.data, p.length);
+    	PseudoHeader ph = new PseudoHeader(p.source, p.destination, 0, IP.TCP_PROTOCOL, s.length());
+    	if(!s.validateChecksum(ph))
+    		return -1;
+    	return s.length();
+	}
+}

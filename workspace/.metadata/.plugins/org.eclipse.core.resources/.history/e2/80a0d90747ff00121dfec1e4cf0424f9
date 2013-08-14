@@ -1,0 +1,21 @@
+import java.io.BufferedWriter;
+import java.io.BufferedReader;
+
+
+
+public class ParseCities {
+	
+	public ParseCities() {
+		
+	}
+	
+	public void run(String[] args){
+		BufferedReader br = new BufferedReader();
+		BufferedWriter bw = new BufferedWriter();
+		
+	}
+	
+	public static void main(String[] args){
+		new ParseCities().run(args);
+	}
+}

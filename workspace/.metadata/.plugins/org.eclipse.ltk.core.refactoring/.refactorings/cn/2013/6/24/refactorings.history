@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">
+<refactoring accessors="true" comment="Delete element from project &apos;cn&apos;&#x0A;- Original project: &apos;cn&apos;&#x0A;- Original element: &apos;nl.vu.cs.cn.TCPImplementationTwo.java&apos;" description="Delete element" element1="/src&lt;nl.vu.cs.cn{TCPImplementationTwo.java" elements="1" flags="589830" id="org.eclipse.jdt.ui.delete" resources="0" stamp="1371117106783" subPackages="false" version="1.0"/>
+</session>

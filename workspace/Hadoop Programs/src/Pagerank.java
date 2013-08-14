@@ -28,7 +28,7 @@ import types.Node;
  * Hadoop program to run the Pagerank algorithm as
  *  specified in 'Data-Intensive Text Processing with MapReduce'
  * @author stevenb
- * @date 10-07-2013
+ * @date 05-08-2013
  */
 public class Pagerank extends Configured implements Tool {
 	
@@ -43,6 +43,7 @@ public class Pagerank extends Configured implements Tool {
 	}
 	
 	public static final double ALPHA = 0.15f; // Global double representing the damping factor of the Pagerank algorithm
+	public static final float CONVERGENCE_POINT = 0.001f;
 	
 	public static class Map extends Mapper<LongWritable, Text, LongWritable, Node> {
 		
@@ -119,6 +120,7 @@ public class Pagerank extends Configured implements Tool {
 	}
 	
 	public static class Partition extends Partitioner<LongWritable, Node> {
+		
 		@Override
 		public int getPartition(LongWritable nodeId, Node node, int numPartitions) {
 			if (numPartitions == 0) {
@@ -130,7 +132,7 @@ public class Pagerank extends Configured implements Tool {
 	
 	public static class Reduce extends Reducer<LongWritable, Node, LongWritable, Text> {
 		
-		private double totalMass; // Global variable to store the mass found in every Reduce cycle
+		private double totalMass; // Global variable to store the mass found in every reduce() call
 		
 		@Override
 		public void setup(Context context) {
@@ -196,7 +198,7 @@ public class Pagerank extends Configured implements Tool {
 		public void setup(Context context) {
 			Configuration conf = context.getConfiguration();
 			numNodes = conf.getInt("numNodes", 0);
-			lostPagerankJuice = conf.getFloat("lostPagerankJuice", 0.0f);
+			lostPagerankJuice = conf.getFloat("missingMass", 0.0f);
 			lostPagerankJuicePart = lostPagerankJuice / numNodes;
 		}
 		
@@ -321,12 +323,30 @@ public class Pagerank extends Configured implements Tool {
 			System.out.println("Phase 1, Iteration " + (iteration + 1) + " Finished in " + (System.currentTimeMillis() - startTime) / 1000.0 + " seconds");
 		}
 		
+		boolean done = false;
+		int retry = 0;
 		double mass = 0.0; // Retrieve the mass written to the 'outm' Path in the reduce step of phase 1
 		FileSystem fs = FileSystem.get(conf);
 		for (FileStatus f : fs.listStatus(new Path(outm))) {
-			FSDataInputStream fin = fs.open(f.getPath());
-			mass += fin.readDouble();
-			fin.close();
+			while (!done && retry < 5) {
+				try {
+					FSDataInputStream fin = fs.open(f.getPath());
+					mass += fin.readDouble();
+					fin.close();
+					done = true;
+					retry = 0;
+				} catch (Exception e) {
+					System.out.printf("Unsuccesfully read a file (%s) | will retry...\n", e);
+					done = false;
+					retry++;
+				}
+				
+			}
+			done = false; // Reset done to false for next round
+			if (retry >= 1) {
+				System.out.printf("\nUnsuccesfully read a file for five times | File has been skipped\n\n");
+				retry = 0; // Reset retry to zero for next round
+			}
 		}
 		return mass;
 	}
@@ -342,16 +362,26 @@ public class Pagerank extends Configured implements Tool {
 	 * 		MapReduce jobs and opening/closing files
 	 */
 	private void iterate(Configuration conf, String startPath, String basePath, int iterations) throws Exception {
-		double mass = 0.0f, // Used to store the mass send around in phase 1 
-		missingMass = 0.0f; // Will hold the data missed in phase 1 and given to phase 2 to give an equal share to every node
+		double mass = 0.0, // Used to store the mass send around in phase 1 
+		missingMass = 0.0, // Will hold the data missed in phase 1 and given to phase 2 to give an equal share to every node
+		oldMass = 0.0; // Stores the previously found mass send around to check convergence
 		
 		System.out.printf("Startpath: %s Basepath: %s Iterations: %d\n", startPath, basePath, iterations);
 		for (int i = 0; i < iterations; i++) {
+			if (oldMass != 0) {
+				System.out.printf("Previous send mass: %f and current send mass: %f\n", oldMass, mass);
+				if (Math.abs(oldMass - mass) < CONVERGENCE_POINT) { // If this holds, convergence is being reached, hence break
+					System.out.printf("Convergence point has been reached in iterations %d\n\toldMass: %f - mass: %f = diff: %f\n", i - 1, oldMass, mass, oldMass - mass);
+					break;
+				}
+			}
+			oldMass = mass;
 			mass = 0.0f;
 			missingMass = conf.getInt("numNodes", 0);
 			
 			System.out.printf("Phase 1, Iteration %d will start\nNumber of Nodes: %d Total Mass Send: %f Missing Mass: %f\n\n;", i + 1, conf.getInt("numNodes", 0), mass, missingMass);
 			mass = phase1(conf, startPath, basePath, i);
+			
 			missingMass -= mass; // The missing mass will equal the total mass (thus, number of nodes) minus the mass found in phase 1
 			System.out.printf("\n\nPhase 1, Iteration %d complete\nNumber of Nodes: %d Total Mass Send: %f Missing Mass: %f\nWill start phase 2, Iteration %d\n\n", i + 1, conf.getInt("numNodes", 0), mass, missingMass, i + 1);
 			conf.setFloat("missingMass", (float) missingMass);
@@ -363,7 +393,6 @@ public class Pagerank extends Configured implements Tool {
 	/**
 	 * Prints out the usages of this program in case the user
 	 *  gave incorrect input
-	 * @param numArgs: number of arguments in the String array object
 	 */
 	private int printUsage() {
 		System.out.println("usage:\t <input path> <output path> <number of nodes> <number of iterations>");
@@ -373,7 +402,6 @@ public class Pagerank extends Configured implements Tool {
 	
 	/**
 	 * Runs the main program
-	 * 
 	 * @param args: String array of arguments given at start 
 	 * @return -1 in case of error | 0 in case of success
 	 * @throws Exception from the iterate() method

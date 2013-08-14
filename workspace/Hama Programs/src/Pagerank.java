@@ -13,7 +13,7 @@ import org.apache.hadoop.util.ToolRunner;
 import org.apache.hama.HamaConfiguration;
 import org.apache.hama.bsp.TextInputFormat;
 import org.apache.hama.bsp.TextOutputFormat;
-import org.apache.hama.graph.AverageAggregator;
+import org.apache.hama.graph.AbsDiffAggregator;
 import org.apache.hama.graph.Edge;
 import org.apache.hama.graph.GraphJob;
 import org.apache.hama.graph.SumAggregator;
@@ -24,7 +24,7 @@ import org.apache.hama.graph.VertexInputReader;
  * Hadoop program to run the Pagerank algorithm as
  *  specified in 'Data-Intensive Text Processing with MapReduce'
  * @author stevenb
- * @date 10-07-2013
+ * @date 15-07-2013
  */
 public class Pagerank extends Configured implements Tool {
 	
@@ -145,13 +145,14 @@ public class Pagerank extends Configured implements Tool {
 		job.setVertexValueClass(DoubleWritable.class);
 		job.setEdgeValueClass(NullWritable.class);
 		job.setVertexInputReaderClass(PageRankTextReader.class);
-		job.setAggregatorClass(SumAggregator.class, AverageAggregator.class); // Aggregator settings
+		job.setAggregatorClass(SumAggregator.class, AbsDiffAggregator.class); // Aggregator settings
 		
 		return job;
 	}
 	
 	public int printUsage() {
 		System.out.println("usage:\t <input path> <output path> <number of iterations>");
+		ToolRunner.printGenericCommandUsage(System.out);
 		return -1;
 	}
 	

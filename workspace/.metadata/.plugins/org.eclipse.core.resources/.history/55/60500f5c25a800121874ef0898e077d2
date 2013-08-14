@@ -1,0 +1,64 @@
+package nl.vu.cs.cn;
+
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectOutputStream;
+
+import nl.vu.cs.cn.IP.IpAddress;
+
+/**
+ * @author Steven van Beelen, 1821806
+ * 
+ * This class serves as the PseudoHeader 
+ *  used to compute the checksum of a TCP Segment.
+ */
+public class PseudoHeader{
+	
+    public IP.IpAddress src;
+    public IP.IpAddress dst;
+    public short 		zero;
+    public short 		ptcl;
+    public int 			tcp_length;
+    
+    /**
+     * Construct a Pseudo IP Header
+     * 
+     * @param src: The source IP address
+     * @param dst: The destination IP address
+     * @param zero: The zero padding used to fill the PseudoHeaders third row
+     * @param ptcl: The protocol number underlying this header (always 6 within this program)
+     * @param tcp_length: The length of the TCP segment which entails this Pseudo IP header
+     */
+    public PseudoHeader(IpAddress src, IpAddress dst, short zero, short ptcl, int tcp_length){
+		this.src 		= src;
+		this.dst 		= dst;
+		this.zero 		= zero;
+		this.ptcl 		= ptcl;
+		this.tcp_length = tcp_length;
+	}
+    
+    /**
+     * Default PseudoHeader constructor
+     */
+    public PseudoHeader(){
+    	this(IP.IpAddress.getAddress(0), IP.IpAddress.getAddress(0), (short)0, (short)0, 0);
+    }
+    
+    /**
+	 * @return returns a byte array from this pseudoheader
+	 */
+    public byte[] getByteArray() throws java.io.IOException{
+    	ByteArrayOutputStream 	byteStream 		= new ByteArrayOutputStream();
+        ObjectOutputStream 		objectStream 	= new ObjectOutputStream(byteStream);
+        
+        objectStream.writeObject(src);
+        objectStream.writeObject(dst);
+        objectStream.writeObject(zero);
+        objectStream.writeObject(ptcl);
+        objectStream.writeObject(tcp_length);
+        objectStream.flush();
+        objectStream.close();
+        byteStream.close();
+        
+       	return byteStream.toByteArray();
+    }
+}      

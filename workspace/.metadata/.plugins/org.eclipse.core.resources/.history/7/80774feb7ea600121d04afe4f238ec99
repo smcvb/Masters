@@ -1,0 +1,40 @@
+import org.apache.hadoop.io.FloatWritable;
+import org.apache.hadoop.io.NullWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hama.graph.AbstractAggregator;
+import org.apache.hama.graph.Vertex;
+
+public class FloatAverageDifferenceAggregator extends AbstractAggregator<FloatWritable, Vertex<?, ?, FloatWritable>>{
+		
+		float accumulatedDifference = 0.0f;
+		
+		@Override
+		public void aggregate(Vertex<?, ?, FloatWritable> vertex, FloatWritable oldValue, FloatWritable newValue){
+			//System.out.printf("old/new Aggregate called\n");
+			if(oldValue != null){
+				float difference = Math.abs(oldValue.get() - newValue.get());
+				System.out.printf("Oldvalue: %f Newvalue: %f\n Absolute Differen: %f\n", oldValue.get(), newValue.get(), difference);
+				System.out.printf("Previous accumulatedDifference: %f\n", accumulatedDifference);
+				accumulatedDifference += difference;
+				System.out.printf("New accumulatedDifference: %f\n", accumulatedDifference);
+			}
+		}
+		
+		@Override
+		public void aggregate(Vertex<?, ?, FloatWritable> vertex, FloatWritable value){
+			System.out.printf("regular Aggregate called\n");
+			accumulatedDifference += value.get();
+		}
+		
+		@Override
+		public FloatWritable finalizeAggregation(){
+			System.out.printf("finalizer ONE called?\n");
+			float average = this.getValue().get() / this.getTimesAggregated().get();
+			return new FloatWritable(average);
+		}
+		
+		@Override
+		public FloatWritable getValue(){
+			return new FloatWritable(accumulatedDifference);
+		}
+	}

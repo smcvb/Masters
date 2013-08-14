@@ -1,0 +1,842 @@
+/**
+ * TODO Questions:
+ *  -Within the close() method:
+ *   Why do we return true if there was a connection, 
+ *   even though the closing may have failed?
+ */
+
+package nl.vu.cs.cn;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.util.Random;
+
+import nl.vu.cs.cn.IP.IpAddress;
+import nl.vu.cs.cn.IP.Packet;
+
+/**
+ * @author Steven van Beelen, 1821806
+ * @coauthor Gerben Rozie
+ * 
+ * This class represents a TCP stack. It should be built on top of the IP stack
+ * 	which is bound to a given IP address.
+ */
+public class TCP {
+	
+	public static final byte FIN = 0x01, /** The FIN(finish) byte flag */
+	SYN = 0x02, /** The SYN(synchornize) byte flag */
+	PSH = 0x08, /** The PSH(push) byte flag */
+	ACK = 0x10;
+	/** The ACK(acknowledge) byte flag */
+	public static final int TIMEOUT = 1, /** Timeout for receiving an acknowledgement in seconds */
+	NUM_RETRANSMISSION = 10;
+	/** Number of times a send may be resend in case of error */
+	
+	public IP ip;
+	/** The underlying IP stack for this TCP stack. */
+	public TCB tcb;
+	
+	/** The Transmission Control Block for this TCP stack. */
+	
+	/****************************************************************************************
+	 * 								Connecting/Socket Class/Methods 						*
+	 ****************************************************************************************/
+	
+	/**
+	 * This class represents a TCP socket.
+	 */
+	public class Socket {
+		
+		public static final int DEFAULT_PORT = 12345;
+		/** The default port number used for client TCP stacks */
+		
+		public int port;
+		
+		/**
+		 * Construct a client socket.
+		 */
+		public Socket() {
+			port = DEFAULT_PORT;
+		}
+		
+		/**
+		 * Construct a server socket bound to the given local port.
+		 *
+		 * @param port the local port to use
+		 */
+		public Socket(int port) {
+			this.port = port;
+		}
+		
+		/**
+		 * Connect this socket to the specified destination and port.
+		 * The client will perform a connect request
+		 *
+		 * @param dest_ipaddr the destination to connect to
+		 * @param port the port to connect to
+		 * @return true if the connect succeeded.
+		 */
+		public boolean connect(IpAddress dest_ipaddr, int port) {
+			int bytesSent = 0;
+			if (!tcb.state.equals(ConnectionState.CLOSED)) {
+				/** there is already a connection, hence stop connect call */
+				return false;
+			}
+			tcb.src_port = (short) this.port;
+			tcb.dest_ipaddr = dest_ipaddr;
+			tcb.dest_port = (short) port;
+			tcb.state = ConnectionState.SYN_SENT;
+			
+			bytesSent = send_syn();
+			/** 1 step of 3-way-handshake */
+			if (bytesSent == -1) {
+				tcb.state = ConnectionState.CLOSED;
+				return false;
+				/** Connecting failed */
+			}
+			else if (tcb.state.equals(ConnectionState.ESTABLISHED)) {
+				bytesSent = send_ack();
+				/** Step 3 of 3-way-handshake (ACK) */
+				if (bytesSent == -1) {
+					tcb.state = ConnectionState.CLOSED;
+					return false;
+					/** Connecting failed */
+				}
+			}
+			return true;
+			/** Connection established */
+		}
+		
+		/**
+		 * Accept a connection on this socket.
+		 * This call blocks until a connection is made.
+		 * The server will wait in the accept method for a connect request
+		 */
+		public void accept() {
+			int bytesSent = 0;
+			if (!tcb.state.equals(ConnectionState.CLOSED)) {
+				/** there is already a connection, hence stop connect call */
+				return;
+			}
+			
+			tcb.src_port = (short) port;
+			tcb.state = ConnectionState.LISTEN;
+			while (!tcb.state.equals(ConnectionState.ESTABLISHED)) {
+				recv_tcp_packet(true);
+				//System.out.printf("Something received...\n"); //TODO Remove print
+				/** Call blocks on receive, be retrying all the time */
+				if (tcb.state.equals(ConnectionState.SYN_RCVD)) {
+					bytesSent = send_syn();
+					//System.out.printf("SYN sent\n"); //TODO Remove print
+					/** 2 step of 3-way-handshake (SYNACK) */
+					if (bytesSent == -1) {
+						//System.out.printf("SERVER CLOSED TOO EARLY!\n"); //TODO Remove print
+						tcb.state = ConnectionState.CLOSED;
+						return;
+						/** Connecting failed || maybe inappropriate to cancel server in faulty syn sending scenario */
+					}
+				}
+			}
+		}
+		
+		/**
+		 * Reads bytes from the socket into the buffer.
+		 * This call is not required to return maxlen bytes
+		 * every time it returns.
+		 *
+		 * @param buf the buffer to read into
+		 * @param offset the offset to begin reading data into
+		 * @param maxlen the maximum number of bytes to read
+		 * @return the number of bytes read, or -1 if an error occurs.
+		 */
+		public int read(byte[] buf, int offset, int maxlen) {
+			int bytesRead = 0;
+			
+			if (!tcb.state.equals(ConnectionState.ESTABLISHED) && !tcb.state.equals(ConnectionState.FIN_WAIT_1) &&
+					!tcb.state.equals(ConnectionState.FIN_WAIT_2) && !tcb.state.equals(ConnectionState.CLOSING) &&
+					!tcb.state.equals(ConnectionState.CLOSE_WAIT) && !tcb.state.equals(ConnectionState.LAST_ACK) &&
+					!tcb.state.equals(ConnectionState.CLOSED)) {
+				return -1;
+				/** If none of these hold, we will not accept data read */
+			}
+			
+			bytesRead = recv_tcp_packet(true);
+			/** true means waitingReceive, as required by the assignment */
+			if (bytesRead == -1) {
+				return -1;
+			}
+			send_ack();
+			/** Send acknowledgement for the received data and possibly for received fin */
+			
+			try {
+				pass_over_data(buf, offset, maxlen);
+			} catch (Exception e) {
+				e.printStackTrace();
+			}
+			return bytesRead;
+		}
+		
+		/**
+		 * The method copying the received data into the buffer
+		 * 
+		 * @param buf: the buffer to read into
+		 * @param offset: the offset to begin reading data into
+		 * @param maxlen: the maximum number of bytes to read
+		 */
+		public void pass_over_data(byte[] buf, int offset, int maxlen) throws NullPointerException, ArrayStoreException, IndexOutOfBoundsException {
+			byte[] data = tcb.data;
+			int len = maxlen, dataLeft = data.length, bytesWritten = 0;
+			
+			while (dataLeft != 0) {
+				len = Math.min(maxlen, dataLeft);
+				System.arraycopy(data, bytesWritten, buf, offset, len);
+				dataLeft -= len;
+				bytesWritten += len;
+				offset += len;
+			}
+		}
+		
+		/**
+		 * Writes to the socket from the buffer.
+		 *
+		 * @param buf the buffer to
+		 * @param offset the offset to begin writing data from
+		 * @param len the number of bytes to write
+		 * @return the number of bytes written or -1 if an error occurs.
+		 */
+		public int write(byte[] buf, int offset, int len) {
+			byte[] data;
+			int dataSize = 0, bytesSent = 0, bytesLeft = len;
+			
+			if (!tcb.state.equals(ConnectionState.ESTABLISHED)) {
+				return -1;
+				/** Not in a state to transmit data */
+			}
+			
+			/** Looping through the array until all packets have been send */
+			while (bytesLeft > 0) {
+				dataSize = Math.min(bytesLeft, TCB.BUF_SIZE);
+				data = new byte[dataSize];
+				System.arraycopy(buf, offset, data, 0, dataSize);
+				bytesSent = send_data(data);
+				/** The actual sending from the socket to the tcp stack */
+				if (bytesSent >= 0) {
+					bytesLeft -= bytesSent;
+					offset += bytesSent;
+				}
+				else {
+					data = null;
+				}
+			}
+			
+			if (bytesLeft == len) {
+				return -1;
+			}
+			return len - bytesLeft;
+		}
+		
+		/**
+		 * Closes the connection for this socket.
+		 * Blocks until the connection is closed.
+		 *
+		 * @return true unless no connection was open. 
+		 */
+		public boolean close() {
+			int bytesSent = 0;
+			if (tcb.state.equals(ConnectionState.CLOSED)) {
+				/** Already closed */
+				return false;
+			}
+			
+			if (tcb.state.equals(ConnectionState.LISTEN) || tcb.state.equals(ConnectionState.SYN_SENT)) {
+				tcb.state = ConnectionState.CLOSED;
+			}
+			else if (tcb.state.equals(ConnectionState.SYN_RCVD) || tcb.state.equals(ConnectionState.ESTABLISHED) || tcb.state.equals(ConnectionState.CLOSE_WAIT)) {
+				bytesSent = send_fin();
+				if (bytesSent == -1) {
+					return true;
+					/** Failed to send FIN to client/server, but return because there was a connection */
+				}
+				if (tcb.state.equals(ConnectionState.SYN_RCVD) || tcb.state.equals(ConnectionState.ESTABLISHED)) {
+					/** Last Client Steps Started **/
+					tcb.state = ConnectionState.FIN_WAIT_1;
+				}
+				else {
+					/** Last Server step started */
+					tcb.state = ConnectionState.LAST_ACK;
+				}
+				
+				recv_tcp_packet(true);
+				/** Receive a FIN, ACK or FINACK from here*/
+				if (tcb.state.equals(ConnectionState.FIN_WAIT_2)) {
+					/** Received ACK in FIN_WAIT_1, Regular Client Close */
+					recv_tcp_packet(true);
+					/** Wait for last fin, afterwards in TIME_WAIT state and leaves this if */
+					bytesSent = send_ack();
+					/** Send clients last ACK; afterward go to TIME_WAIT */
+					if (bytesSent == -1) {
+						return true;
+						/** Failed to send LAST_ACK to Server, but return because there was a connection */
+					}
+				}
+				else if (tcb.state.equals(ConnectionState.CLOSING)) {
+					/** Received FIN in FIN_WAIT_1, Simultaneous Close */
+					bytesSent = send_ack();
+					/** Send clients last ACK */
+					if (bytesSent == -1) {
+						return true;
+						/** Failed to send CLOSING state ACK to Server, but return because there was a connection */
+					}
+					recv_tcp_packet(true);
+					/** Wait for last ACK, afterwards in TIME_WAIT state */
+				}
+				else if (tcb.state.equals(ConnectionState.TIME_WAIT)) {
+					/** Received FINACK in FIN_WAIT_1, ????? Client Close */
+					bytesSent = send_ack();
+					/** Send clients last ack, afterwards in TIME_WAIT state */
+					if (bytesSent == -1) {
+						return false;
+						/** Failed to send LAST_ACK to Server */
+					}
+				}
+				tcb.clean();//TODO placed correctly?
+			}
+			if (tcb.state.equals(ConnectionState.TIME_WAIT)) { /** Send the last ack and wait */
+				try {
+					Thread.sleep(TIMEOUT / 60);
+					/** TIMEOUT is 60 seconds */
+				} catch (InterruptedException e) {
+					e.printStackTrace();
+				}
+			}
+			return true;
+		}
+	}
+	
+	/**
+	* Constructs a TCP stack for the given virtual address.
+	* The virtual address for this TCP stack is then
+	* 192.168.1.address.
+	*
+	* @param address: Integer storing the last octet of the virtual IP address (1-254)
+	* @throws IOException: if the IP stack fails to initialize.
+	*/
+	public TCP(int address) throws IOException {
+		ip = new IP(address);
+		tcb = new TCB(ip.getLocalAddress());
+		tcb.src_seqnum = new Random().nextInt(250);
+	}
+	
+	/**
+	* @return a new socket for this stack
+	*/
+	public Socket socket() {
+		return new Socket();
+	}
+	
+	/**
+	* @return a new server socket for this stack bound to the given port
+	* @param port the port to bind the socket to.
+	*/
+	public Socket socket(int port) {
+		return new Socket(port);
+	}
+	
+	/****************************************************************************************
+	 * 									Sending Methods			 							*
+	 ****************************************************************************************/
+	
+	/**
+	 * Method to send a 'synchronize'(SYN) request message to the destination port
+	 * 
+	 * @return the number of bytes sent as an integer
+	 * 	-1 in case of failed sending and bytesSent in case packet is received
+	 */
+	public int send_syn() {
+		int bytesSent = 0, numRetransmission = NUM_RETRANSMISSION;
+		byte flags = (byte) 0;
+		
+		if (tcb.state.equals(ConnectionState.SYN_RCVD)) {
+			/** Server socket which already received a SYN sends SYNACK back to client */
+			flags = PSH | SYN | ACK;
+		}
+		else if (tcb.state.equals(ConnectionState.SYN_SENT)) {
+			/** Client socket sending the first SYN for the connection */
+			flags = PSH | SYN;
+		}
+		else {
+			/** Not in the states LISTEN or CLOSED, hence inappropriate method access */
+			return -1;
+		}
+		
+		while (numRetransmission > 0) {
+			bytesSent = send_tcp_packet(tcb.dest_ipaddr, tcb.dest_port, tcb.src_port, tcb.src_seqnum, tcb.acknum, flags, (short) 0, new byte[0], 0);
+			if (bytesSent == -1) {
+				return -1;
+			}
+			else {
+				/** Expected acknum should equal what we want them to acknowledge */
+				tcb.expected_acknum = tcb.src_seqnum + 1;
+			}
+			
+			if (recv_tcp_packet(true) > 0 && !tcb.state.equals(ConnectionState.SYN_RCVD)) {
+				/** CLIENT: Receiving the synack for the SYN request SERVER: Receiving the ack for the SYN send */
+				return bytesSent;
+			} 
+			/** in case of else: failed, hence recent data */
+			numRetransmission--;
+		}
+		return -1;
+		/** SYN sending failed */
+	}
+	
+	/**
+	 * Method to send a data message to the destination port
+	 * 
+	 * @param data: the data to be send in a byte array
+	 * @return the number of bytes sent as an integer
+	 */
+	public int send_data(byte[] data) {
+		int bytesSent = 0, dataSize = data.length, numRetransmission = NUM_RETRANSMISSION;
+		byte flags = PSH;
+		
+		while (numRetransmission > 0) {
+			bytesSent = send_tcp_packet(tcb.dest_ipaddr, tcb.dest_port, tcb.src_port, tcb.src_seqnum, tcb.acknum, flags, (short) 0, data, dataSize);
+			if (bytesSent == -1) {
+				return -1;
+			}
+			else {
+				/** Expected acknum should equal what we want them to acknowledge */
+				tcb.expected_acknum = tcb.src_seqnum + bytesSent;
+			}
+			
+			if (recv_tcp_packet(true) > 0) {
+				/** Receiving the acknowledgement that the data has arrived */
+				return bytesSent;
+			}
+			/** in case of else: failed, hence recent data */
+			numRetransmission--;
+		}
+		return -1;
+		/** Data sending failed */
+	}
+	
+	/**
+	 * Method to send an 'acknowledgement'(ACK) message to the destination port
+	 * 
+	 * @return the number of bytes sent as an integer
+	 */
+	public int send_ack() {
+		int bytesSent = 0, numRetransmission = NUM_RETRANSMISSION;
+		byte flags = PSH | ACK;
+		
+		while (numRetransmission > 0) {
+			//System.out.printf("Client sending ACK %d!\n", NUM_RETRANSMISSION + 1 - numRetransmission); //TODO Remove print
+			bytesSent = send_tcp_packet(tcb.dest_ipaddr, tcb.dest_port, tcb.src_port, tcb.src_seqnum, tcb.acknum, flags, (short) 0, new byte[0], 0);
+			if (bytesSent >= 0) {
+				break;
+			}
+			numRetransmission--;
+		}
+		return bytesSent;
+	}
+	
+	/**
+	 * Method to send a 'finish'(FIN) request message to the destination port
+	 * 
+	 * @return the number of bytes sent as an integer
+	 */
+	public int send_fin() {
+		int bytesSent = 0, numRetransmission = NUM_RETRANSMISSION;
+		byte flags = (byte) 0;
+		
+		if (tcb.state.equals(ConnectionState.SYN_RCVD) || tcb.state.equals(ConnectionState.ESTABLISHED)) {
+			flags = PSH | FIN;
+			/** Client shut down */
+		}
+		else if (tcb.state.equals(ConnectionState.CLOSE_WAIT)) {
+			flags = PSH | FIN | ACK;
+			/** Server shut down */
+		}
+		
+		while (numRetransmission > 0) {
+			bytesSent = send_tcp_packet(tcb.dest_ipaddr, tcb.dest_port, tcb.src_port, tcb.src_seqnum, tcb.acknum, flags, (short) 0, new byte[0], 0);
+			if (bytesSent == -1) {
+				return -1;
+			}
+			else {
+				/** Expected acknum should equal what we want them to acknowledge */
+				tcb.expected_acknum = tcb.src_seqnum + 1;
+			}
+			
+			if (recv_tcp_packet(true) > 0) {
+				/** Receiving the acknowledgement that the fin has arrived */
+				return bytesSent;
+			}
+			numRetransmission--;
+		}
+		return -1;
+		/** FIN sending failed */
+	}
+	
+	/**
+	 * Base sending method of tcp packets
+	 * 
+	 * @param dest_ipaddr: The destination IP address to send to
+	 * @param src_port: The port from which the packet will originate
+	 * @param dest_port: The port to which the packet will be send
+	 * @param seqnum: The sequence number for this packet
+	 * @param acknum: The acknowlegde number for this packet
+	 * @param flags: The flags for this packet
+	 * @param window_size: The windows size for this packet (not used)
+	 * @param data: The data which this packet will send
+	 * @param data_size: The size of the data in this packet
+	 * @return The number of bytes send as an integer
+	 *  -1 in case of error and 0 or higher in case of success
+	 */
+	public int send_tcp_packet(IpAddress dest_ipaddr, short src_port, short dest_port, int seqnum, int acknum, byte flags, short window_size, byte[] data, int data_size) {
+		int bytesSent;
+		short checksum = 0;
+		short urg_pointer = 0;
+		byte data_offset = 0x20;
+		
+		//System.out.printf("Trying to send ...\nsrc port: %d\ndst port: %d\nsrc addr: %d\ndst addr: %d\n", src_port, dest_port, ip.getLocalAddress().getAddress(), dest_ipaddr.getAddress()); //TODO Remove print
+		
+		/** The data starts after 20 bytes permenantly, since we do not use any options */
+		
+		TcpHeader tcpHead = new TcpHeader(src_port, dest_port, seqnum, acknum, data_offset, flags, window_size, checksum, urg_pointer);
+		tcpHead.data_offset = (byte) tcpHead.length();
+		TcpSegment tcpSeg = new TcpSegment(tcpHead, data);
+		PseudoHeader ph = new PseudoHeader(ip.getLocalAddress(), dest_ipaddr, (short) 0, (short) IP.TCP_PROTOCOL, tcpSeg.length());
+		tcpSeg.setChecksum(tcpSeg.computeChecksum(ph));
+		
+		Packet p = null;
+		try {
+			p = new Packet(dest_ipaddr.getAddress(), IP.TCP_PROTOCOL, 2, tcpSeg.getByteArray(), tcpSeg.length());
+		} catch (IOException e1) {
+			e1.printStackTrace();
+		}
+		
+		try {
+			bytesSent = ip.ip_send(p);
+			//System.out.printf("Sent %d bytes\n", bytesSent); //TODO Remove print
+		} catch (IOException e) {
+			e.printStackTrace();
+			bytesSent = -1;
+		}
+		return bytesSent;
+	}
+	
+	/****************************************************************************************
+	 * 									Receiving Methods 									*
+	 ****************************************************************************************/
+	
+	/**
+	 * Base method to receive the ip packets
+	 * 
+	 * @param waitingReceive: boolean dictating the type of receive method used
+	 * @return the number of bytes received as an integer
+	 */
+	public int recv_tcp_packet(boolean waitingReceive) {
+		Packet p = new Packet(0, 0, 0, new byte[0], 0);
+		/** Initial empty packet to store incoming packet */
+		TcpSegment s = new TcpSegment();
+		PseudoHeader ph = new PseudoHeader();
+		
+		try {
+			how_to_receive(p, waitingReceive);
+		} catch (IOException e) {
+			e.printStackTrace();
+			return -1;
+		} catch (InterruptedException e) {
+			//System.out.printf("Timeout ~\n"); //TODO Remove print
+			return -1;
+		}
+		
+		if (p.protocol != IP.TCP_PROTOCOL) {
+			return -1;
+		}
+		
+		s = decodePacket(p);
+		/** Writes all packet info to a tcp segment */
+		ph = new PseudoHeader(IP.IpAddress.getAddress(p.source), IP.IpAddress.getAddress(p.destination), (short) 0, (short) IP.TCP_PROTOCOL, s.length());
+		
+		if (!s.validateChecksum(ph)) {
+			//System.out.printf("Got invalid checksum...\n"); //TODO Remove print
+			return -1;
+		}
+		if (!correct_recvd_packet(s, ph)) {
+			//System.out.printf("Got incorrect packet...\n"); //TODO Remove print
+			return -1;
+		}
+		
+		System.out.printf("Got here...\n");
+		
+		/** 
+		 * State setting and ack/dest_seqnum setting through segment 
+		 * We may assume receiving has all gone well from here on, 
+		 * hence no need to reset possible set states and ack/dest_seqnums 
+		 */
+		recv_syn(s);
+		recv_data(s);
+		recv_ack(s);
+		recv_fin(s);
+		
+		return s.length();
+		/** s.length equals bytesRead */
+	}
+	
+	/**
+	 * Switching method between the ip_receive_timeout method
+	 * 	and the ip_receive method
+	 * 
+	 * @param p: The packet which will store the received information
+	 * @param waitingReceive: the boolean which dictates if
+	 * 	ip_receive_timeout or ip_receive will be used
+	 * @throws InterruptedException 
+	 * @throws IOException 
+	 */
+	public void how_to_receive(Packet p, boolean waitingReceive) throws IOException, InterruptedException {
+		if (waitingReceive) {
+			ip.ip_receive_timeout(p, TIMEOUT);
+		}
+		else {
+			ip.ip_receive(p);
+		}
+	}
+	
+	/**
+	 * Method which decodes an incoming packet into a 
+	 * 	TCP segment
+	 * 
+	 * @param p: the received packet
+	 * @return a TCP segment containing all the relevant data from the packet
+	 */
+	private TcpSegment decodePacket(Packet p) {
+		short src_port = (short) 0;
+		short dest_port = (short) 0;
+		int seqnum = 0;
+		int acknum = 0;
+		byte data_offset = (byte) 0;
+		byte flags = (byte) 0;
+		short window_size = 0;
+		short checksum = (short) 0;
+		short urg_pointer = (short) 0;
+		byte[] data = new byte[TCB.BUF_SIZE];
+		
+		ByteBuffer shortBuffer = ByteBuffer.allocate(2);
+		ByteBuffer intBuffer = ByteBuffer.allocate(4);
+		shortBuffer.order(ByteOrder.BIG_ENDIAN);
+		intBuffer.order(ByteOrder.BIG_ENDIAN);
+		
+		shortBuffer.put(p.data[0]);
+		shortBuffer.put(p.data[1]);
+		shortBuffer.rewind();
+		src_port = shortBuffer.getShort(); //SRC_PORT
+		shortBuffer.rewind();
+		shortBuffer.put(p.data[2]);
+		shortBuffer.put(p.data[3]);
+		shortBuffer.rewind();
+		dest_port = shortBuffer.getShort(); //DEST_PORT
+		shortBuffer.rewind();
+		intBuffer.put(p.data[4]);
+		intBuffer.put(p.data[5]);
+		intBuffer.put(p.data[6]);
+		intBuffer.put(p.data[7]);
+		intBuffer.rewind();
+		seqnum = intBuffer.getInt(); //SEQNUM
+		intBuffer.rewind();
+		intBuffer.put(p.data[8]);
+		intBuffer.put(p.data[9]);
+		intBuffer.put(p.data[10]);
+		intBuffer.put(p.data[11]);
+		intBuffer.rewind();
+		acknum = intBuffer.getInt(); //ACKNUM
+		intBuffer.rewind();
+		data_offset = p.data[12]; //DATA_OFFSET
+		flags = p.data[13]; //FLAGS
+		shortBuffer.put(p.data[14]);
+		shortBuffer.put(p.data[15]);
+		window_size = shortBuffer.getShort(); //WINDOW_SIZE
+		shortBuffer.rewind();
+		shortBuffer.put(p.data[16]);
+		shortBuffer.put(p.data[17]);
+		checksum = shortBuffer.getShort(); //CHECKSUM
+		shortBuffer.rewind();
+		shortBuffer.put(p.data[18]);
+		shortBuffer.put(p.data[19]);
+		shortBuffer.rewind();
+		urg_pointer = shortBuffer.getShort(); //URG_POINTER
+		shortBuffer.rewind();
+		data = new byte[p.length - 20]; //DATA
+		System.arraycopy(p.data, 21, data, 0, p.length);
+		
+		return new TcpSegment(new TcpHeader(src_port, dest_port, seqnum, acknum, data_offset, flags, window_size, checksum, urg_pointer), data);
+	}
+	
+	/**
+	 * Checks whether the packet sends corresponds with what expected
+	 *  Checks if addresses, ports, ack- and seqnums corresponds with what is required
+	 * 
+	 * @param segment: TCPSegment containing the received Packets TCP info
+	 * @param ph: Pseudoheader containing the received Packets IP info
+	 * @return True if it was a correct packet | False if it was an incorrect packet
+	 */
+	private boolean correct_recvd_packet(TcpSegment segment, PseudoHeader ph) {
+		if (tcb.dest_ipaddr.getAddress() == 0) {
+			tcb.dest_ipaddr = ph.src_ipaddr;
+		}
+		if (tcb.src_port == 0) {
+			tcb.src_port = segment.tcpHeader.dest_port;
+		}
+		if (tcb.dest_port == 0) {
+			tcb.dest_port = segment.tcpHeader.src_port;
+		}
+		
+		if (tcb.dest_ipaddr.getAddress() == ph.dest_ipaddr.getAddress() && tcb.src_port == segment.tcpHeader.dest_port && tcb.dest_port == segment.tcpHeader.src_port
+				&& tcb.dest_seqnum == segment.tcpHeader.seqnum //Check whether the seqnum of the packet equals the seqnum we expect 
+				&& tcb.expected_acknum == segment.tcpHeader.acknum) { //Check whether the data we send is the data they acknowledge
+			return true;
+		}
+		return false;
+	}
+	
+	/**
+	 * Receive a syn packet and based on the connection state
+	 *  move to a follow up state
+	 *   Inherently, receiving the syn is the second step of the 
+	 *   3-way-handshake
+	 * Only implement regular connect, not simultaneous connect.
+	 * Follows from only accepting SYNACKs in SYN_SENT state and 
+	 *  not accepting SYNs in SYN_SENT state
+	 * If it is a SYN packet, set the acknowledgment and
+	 *  destination sequence number according to the segment received
+	 * 
+	 * @param flags: byte variable for the flags of the packet received
+	 */
+	private void recv_syn(TcpSegment s) {
+		if (tcb.state.equals(ConnectionState.LISTEN) && s.tcpHeader.flags == (PSH | SYN)) {
+			/** Server receives SYN from Client */
+			tcb.state = ConnectionState.SYN_RCVD;
+		}
+		else if (tcb.state.equals(ConnectionState.SYN_SENT) && s.tcpHeader.flags == (PSH | SYN | ACK)) {
+			/** Clients receives SYNACK from Server */
+			tcb.state = ConnectionState.ESTABLISHED;
+		}
+		/** Acknum to send should equal the seqnum received, plus one */
+		tcb.acknum = s.tcpHeader.seqnum + 1;
+		tcb.dest_seqnum = s.tcpHeader.seqnum + 1;
+	}
+	
+	/**
+	 * If it is a data packet, set the acknowledgment and
+	 *  destination sequence number according to the segment received
+	 * 
+	 * @param flags: byte variable for the flags of the packet received
+	 */
+	private void recv_data(TcpSegment s) {
+		if (s.tcpHeader.flags != PSH) {
+			return;
+		}
+		if (!tcb.state.equals(ConnectionState.ESTABLISHED) || !tcb.state.equals(ConnectionState.FIN_WAIT_1) || !tcb.state.equals(ConnectionState.FIN_WAIT_2)) {
+			return;
+		}
+		/** Acknum to send should equal the seqnum received, plus the data size */
+		tcb.acknum = s.tcpHeader.seqnum + s.data.length;
+		tcb.dest_seqnum = s.tcpHeader.seqnum + s.data.length;
+		;
+	}
+	
+	/**
+	 * Receive a FIN packet and based on whether the flags are set 
+	 *  and if the client/server is in the correct state to call a close, 
+	 *  proceed to a follow up state based on the flag from the packet and
+	 *  the current state 
+	 * If it is a FIN packet, set the acknowledgment and
+	 *  destination sequence number according to the segment received
+	 * 
+	 * @param flags: byte variable for the flags of the packet received
+	 */
+	private void recv_fin(TcpSegment s) {
+		if (s.tcpHeader.flags != (PSH | FIN) || s.tcpHeader.flags != (PSH | FIN | ACK)) {
+			return;
+		}
+		if (!tcb.state.equals(ConnectionState.ESTABLISHED) || !tcb.state.equals(ConnectionState.FIN_WAIT_1) ||
+				!tcb.state.equals(ConnectionState.FIN_WAIT_2) || !tcb.state.equals(ConnectionState.CLOSE_WAIT)) {
+			return;
+		}
+		
+		if (s.tcpHeader.flags == (PSH | FIN)) {
+			if (tcb.state.equals(ConnectionState.ESTABLISHED)) {
+				/** Server receives FIN from Client */
+				send_ack();//TODO find a way to send an acknowledgement when a server doesnt expect a close call
+				tcb.state = ConnectionState.CLOSE_WAIT;
+			}
+			if (tcb.state.equals(ConnectionState.FIN_WAIT_1)) {
+				/** Server receives FIN from Client */
+				tcb.state = ConnectionState.CLOSING;
+			}
+			if (tcb.state.equals(ConnectionState.FIN_WAIT_2)) {
+				/** Clients receives FIN from Server */
+				tcb.state = ConnectionState.TIME_WAIT;
+			}
+		}
+		else if (s.tcpHeader.flags == (PSH | FIN | ACK) && tcb.state.equals(ConnectionState.FIN_WAIT_1)) {
+			tcb.state = ConnectionState.TIME_WAIT;
+			/** Client receives FINACK from Server */
+		}
+		
+		/** Acknum to send should equal the seqnum received, plus one */
+		tcb.acknum = s.tcpHeader.seqnum + 1;
+		tcb.dest_seqnum = s.tcpHeader.seqnum + 1;
+	}
+	
+	/**
+	 * Receive an ACK packet and based on the flags and current process
+	 *  state, possibly change the state.
+	 * Only instances were a sole ACK packet changes state,
+	 *  is during the Handshake and Close steps.
+	 * If it is an ACK packet, set the source sequence number 
+	 *  according to the segment received
+	 * 
+	 * @param flags: byte variable for the flags of the packet received
+	 */
+	private void recv_ack(TcpSegment s) {
+		if (s.tcpHeader.flags != (PSH | ACK)) {
+			return;
+		}
+		if (!tcb.state.equals(ConnectionState.SYN_RCVD) && !tcb.state.equals(ConnectionState.ESTABLISHED) &&
+				!tcb.state.equals(ConnectionState.FIN_WAIT_1) && !tcb.state.equals(ConnectionState.LAST_ACK) && !tcb.state.equals(ConnectionState.CLOSING)) {
+			return;
+		}
+		
+		/** 
+		 * HANDSHAKE
+		 * Server receive ack in syn_rcvd state 
+		 **/
+		if (tcb.state.equals(ConnectionState.SYN_RCVD)) {
+			tcb.state = ConnectionState.ESTABLISHED;
+		}
+		/**
+		 * CLOSE 
+		 * 1. Client receive ack in fin_wait_one state
+		 * 2. Server receive ack in last_ack state 
+		 **/
+		if (tcb.state.equals(ConnectionState.FIN_WAIT_1)) {
+			tcb.state = ConnectionState.FIN_WAIT_2;
+		}
+		else if (tcb.state.equals(ConnectionState.LAST_ACK)) {
+			tcb.state = ConnectionState.CLOSED;
+		}
+		else if (tcb.state.equals(ConnectionState.CLOSING)) {
+			tcb.state = ConnectionState.TIME_WAIT;
+		}
+		/**
+		 * Set the source sequence number to the acknowledgement number 
+		 *  received, since that will also be the sequence number the
+		 *  other side will expect to get
+		 */
+		tcb.src_seqnum = s.tcpHeader.acknum;
+	}
+}

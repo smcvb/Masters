@@ -1,0 +1,131 @@
+package nl.vu.cs.cn;
+
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.ObjectOutputStream;
+import java.nio.ByteBuffer;
+
+import nl.vu.cs.cn.PseudoHeader;
+import nl.vu.cs.cn.TcpHeader;
+
+/**
+ * @author Steven van Beelen, 1821806
+ * 
+ * This class serves as the representation of a
+ * 	TCP segment, the packets which are send and received.
+ * The segment contains the TCP Header and the actual 
+ * 	data which is send and received.
+ */
+public class TcpSegment{
+	
+    public TcpHeader 	tcpHeader;
+    public byte[] 		data;
+    
+    /**
+     * Construct a TCP Segment
+     * 
+     * @param tcpHeader: The header of a TCP segment, containing all relevant connection information
+     * @param data: The actual data send with the TCP segment
+     */
+    public TcpSegment(TcpHeader tcpHeader,byte[] data){
+    	this.tcpHeader 	= tcpHeader;
+    	this.data 		= data;
+    }
+    
+    /**
+     * Default TCP Segment constructor
+     */
+    public TcpSegment(){
+    	this(new TcpHeader(), null);
+    }
+    
+    /** 
+     * @return the number of bytes as an integer of the tcp segment
+     */
+    public int length(){
+      	return tcpHeader.length() + data.length;
+    }
+    
+    /**
+	 * Sets the checksum for this tcp segment to 
+	 * 	the given checksum parameter
+	 * 
+	 * @param checksum: the checksum calculated for 
+	 * 	the complete packet (pseudoheader + tcpheader + data)
+	 */
+	public void setChecksum(short checksum){
+		tcpHeader.checksum = checksum;
+	}
+	
+    /**
+     * Computes and the checksum for this tcp segment and returns it as a short
+     * 	CAN PICK UP ODD BYTES SEQUENCES DURING FOR LOOP, PADDING WITH ZERO NEEDED!
+     * 
+     * @param ps: PseudoHeader used to compute the checksum
+     * @return returns the computed checksum as a short
+     */
+	public short computeChecksum(PseudoHeader ph){
+		byte[]	ph_byte_array 	= null,
+				tcp_byte_array 	= null;
+		try{
+			ph_byte_array	= ph.getByteArray();
+			tcp_byte_array 	= getByteArray();
+		} catch(IOException e1){
+			e1.printStackTrace();
+		}
+		ByteBuffer 	bb = ByteBuffer.allocate(2);
+		bb.put(ph_byte_array[0]);
+		bb.put(ph_byte_array[1]);
+    	short 		checksum 		= bb.getShort();
+    	
+    	/** Loop to add all 16bit words (shorts) together from the pseudoheader */
+    	for(int i = 2; i < ph_byte_array.length; i += 2){
+    		bb.put(ph_byte_array[i]);
+    		bb.put(ph_byte_array[i+1]);
+    		checksum += bb.getShort();
+    	}
+    	
+    	/** Loop to add all 16bit words (shorts) together from the tcp segment */
+    	for(int i = 2; i < tcp_byte_array.length; i += 2){
+    		bb.put(tcp_byte_array[i]);
+    		bb.put(tcp_byte_array[i+1]);
+    		checksum += bb.getShort();
+    	}
+    	
+    	/** '~' used to retrieve the complement of checksum */
+    	return (short)~checksum;
+	}
+		
+	/**
+	 * validates the checksum of an incoming packet
+	 * 
+	 * @return 	True: Checksum is correct
+	 * 			False: Checksum is incorrect
+	 */
+	public boolean validateChecksum(PseudoHeader ph){
+		if(computeChecksum(ph) == 0)
+			return true;
+		return false;
+	}
+	
+    /**
+	 * @return returns a byte array of this tcp segment
+	 */
+	public byte[] getByteArray() throws java.io.IOException{
+       	byte[] 					header,	segment;
+        ByteArrayOutputStream 	byteStream 		= new ByteArrayOutputStream();
+        ObjectOutputStream 		objectStream 	= new ObjectOutputStream(byteStream);
+    
+        objectStream.writeObject(tcpHeader);
+        objectStream.flush();
+        objectStream.close();
+        byteStream.close();
+        
+        header 	= byteStream.toByteArray();
+        segment = new byte[header.length + data.length];
+        System.arraycopy(header, 0, segment, 0, header.length);
+        System.arraycopy(data, 0, segment, header.length, data.length);
+        
+        return segment;
+	}
+}

@@ -1,0 +1,21 @@
+package types;
+
+import org.apache.hadoop.io.ArrayWritable;
+import org.apache.hadoop.io.Writable;
+
+public class TextIntPairArrayWritable extends ArrayWritable {
+	
+	public TextIntPairArrayWritable(Class<? extends Writable> valueClass) {
+		super(valueClass);
+	}
+	
+	@Override
+	public String toString() {
+		String[] strings = toStrings();
+		StringBuilder b = new StringBuilder();
+		for (int i = 0; i < strings.length; i++) {
+			b.append(strings[i]);
+		}
+		return b.toString();
+	}
+}

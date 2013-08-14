@@ -33,11 +33,11 @@ import cloud9.WikipediaPageInputFormat;
  * Hadoop program to run the Inverted Indexing algorithm as
  *  specified in 'Data-Intensive Text Processing with MapReduce'
  * @author stevenb
- * @date 10-07-2013
+ * @date 18-07-2013
  */
 public class InvertedIndex extends Configured implements Tool {
 	
-	public static final int REDUCE_TASKS = 27;
+	public static final int REDUCE_TASKS = 37; // 26 letters + 10 digits + 1 signs
 	public static final String[] STOPWORDS = {"a", "about", "above", "after", "again", "against", "all", "am", "an", "and", "any", "are", "aren't", "as", "at",
 			"be", "because", "been", "before", "being", "below", "between", "both", "but", "by",
 			"can't", "cannot", "could", "couldn't", "did", "didn't", "do", "does", "doesn't", "doing", "don't", "down", "during",
@@ -96,7 +96,7 @@ public class InvertedIndex extends Configured implements Tool {
 				}
 				postingTupleMap.clear(); // Empty memory
 			}
-			previousDocid = currentDocid;
+			previousDocid = currentDocid; // Store previous found DocID because: 1. We finished a document and move to the next 2. We didn't finish, but reassign it
 		}
 		
 		@Override
@@ -168,6 +168,7 @@ public class InvertedIndex extends Configured implements Tool {
 	}
 	
 	public static class Partition extends Partitioner<TextLongPair, IntWritable> {
+		
 		@Override
 		public int getPartition(TextLongPair tuple, IntWritable count, int numPartitions) {
 			if (numPartitions == 0) {
@@ -177,14 +178,11 @@ public class InvertedIndex extends Configured implements Tool {
 		}
 	}
 	
-	//public static class Reduce extends Reducer<TextLongPair, IntWritable, Text, TextIntPairArrayWritable> { //TODO
-	public static class Reduce extends Reducer<TextLongPair, IntWritable, Text, Text> { //TODO
+	public static class Reduce extends Reducer<TextLongPair, IntWritable, Text, TextIntPairArrayWritable> {
 		
 		private String currentTerm, previousTerm;
 		private ArrayList<TextIntPair> postingsList;
 		private TextIntPairArrayWritable writablePostings;
-		
-		private String postingsString; //TODO
 		
 		@Override
 		public void setup(Context context) {
@@ -192,61 +190,57 @@ public class InvertedIndex extends Configured implements Tool {
 			previousTerm = null;
 			postingsList = new ArrayList<TextIntPair>();
 			writablePostings = new TextIntPairArrayWritable(TextIntPair.class);
-			
-			postingsString = ""; //TODO
 		}
 		
 		@Override
 		public void reduce(TextLongPair key, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException {
-//			currentTerm = key.getTerm().toString();
-//			if (!currentTerm.equals(previousTerm) && previousTerm != null) { // New term start, write out old term
-//				TextIntPair[] postingsArray = new TextIntPair[postingsList.size()];
-//				postingsArray = postingsList.toArray(postingsArray);
-//				writablePostings.set(postingsArray);
-//				context.write(new Text(previousTerm), writablePostings);
-//				postingsList.clear(); // Empty memory
-//			}
-//			TextIntPair posting = new TextIntPair(new Text(key.getDocid().toString()), new IntWritable(values.iterator().next().get()));
-//			postingsList.add(posting);
-//			previousTerm = currentTerm;
-			
 			currentTerm = key.getTerm().toString();
 			if (!currentTerm.equals(previousTerm) && previousTerm != null) { // New term start, write out old term
-				context.write(new Text(previousTerm), new Text(postingsString));
-				postingsString = "";
+				TextIntPair[] postingsArray = new TextIntPair[postingsList.size()];
+				postingsArray = postingsList.toArray(postingsArray);
+				writablePostings.set(postingsArray);
+				context.write(new Text(previousTerm), writablePostings);
+				postingsList.clear(); // Empty memory
 			}
+			// Write new docID and term frequency to this term
 			TextIntPair posting = new TextIntPair(new Text(key.getDocid().toString()), new IntWritable(values.iterator().next().get()));
-			postingsString = postingsString + " " + posting.toString();
+			postingsList.add(posting);
 			previousTerm = currentTerm;
 		}
 		
 		@Override
-		public void cleanup(Context context) throws IOException, InterruptedException { //clean last term
-//			TextIntPair[] postingsArray = new TextIntPair[postingsList.size()];
-//			postingsArray = postingsList.toArray(postingsArray);
-//			writablePostings.set(postingsArray);
-//			context.write(new Text(currentTerm), writablePostings);
-//			postingsList.clear(); // Empty memory
-			
-			context.write(new Text(previousTerm), new Text(postingsString));
-			postingsString = "";
+		public void cleanup(Context context) throws IOException, InterruptedException { 
+			TextIntPair[] postingsArray = new TextIntPair[postingsList.size()]; // Clean last term
+			postingsArray = postingsList.toArray(postingsArray);
+			writablePostings.set(postingsArray);
+			context.write(new Text(currentTerm), writablePostings);
+			postingsList.clear(); // Empty memory
 		}
 	}
 	
 	/**
 	 * Create the job.
+	 * The conf.set()-s do the following:
+	 * 	io.sort.mb: Give the sorting phase more memory
+	 * 		Thus lowers the amount of read/writes to HDFS
+	 *  mapred.child.java.opts: Gives the child's more memory.
+	 *  	Default is 2048; doubled primarily for the reducers
+	 *  mapred.task.timeout: When setting the timeout to 0, a task
+	 *  	will never be killed if it reaches a certain no-response
+	 *  	time
+	 * 
 	 * @param args: String array of arguments
 	 * @param conf: a Configuration Object for the MapReduce job
 	 * @return a finalized Job Object for this MapReduce job
 	 * @throws IOException for creating the job and setting the input path
 	 */
 	private Job createJob(Configuration conf, String inputPath, String outputPath, int reduceTasks) throws IOException {
-		conf.set("io.sort.mb", "512");
+		conf.set("io.sort.mb", "512"); // Configuration settings
 		conf.set("mapred.child.java.opts", "-Xmx4096m");
 		conf.set("mapred.task.timeout", "0");
 		conf.set("wiki.language", "en");
 		
-		Job job = new Job(conf, "Inverted Indexing with no ArrayWritable"); // Main settings
+		Job job = new Job(conf, "Inverted Indexing"); // Main settings
 		job.setJarByClass(InvertedIndex.class);
 		job.setNumReduceTasks(reduceTasks);
 		FileInputFormat.setInputPaths(job, new Path(inputPath)); // Input settings
@@ -264,15 +258,19 @@ public class InvertedIndex extends Configured implements Tool {
 		return job;
 	}
 	
+	/**
+	 * Prints out the usages of this program in case the user
+	 *  gave incorrect input
+	 */
 	private int printUsage() {
 		System.out.println("usage:\t <input path> <output path> <number of reduce tasks [default = 27]>");
+		ToolRunner.printGenericCommandUsage(System.out);
 		return -1;
 	}
 	
 	@Override
 	/**
 	 * Runs the main program
-	 * 
 	 * @param args: String array of arguments given at start 
 	 * @return -1 in case of error | 0 in case of success
 	 * @throws Exception from the createJob() and the waitForCompletion() methods

@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">
+<refactoring comment="Rename type &apos;nl.vu.cs.cn.TCPImplementation&apos; to &apos;TCP&apos;&#x0A;- Original project: &apos;cn&apos;&#x0A;- Original element: &apos;nl.vu.cs.cn.TCPImplementation&apos;&#x0A;- Renamed element: &apos;nl.vu.cs.cn.TCP&apos;&#x0A;- Update references to refactored element&#x0A;- Update textual occurrences in comments and strings" description="Rename type &apos;TCPImplementation&apos;" flags="589830" id="org.eclipse.jdt.ui.rename.type" input="/src&lt;nl.vu.cs.cn{TCPImplementation.java[TCPImplementation" matchStrategy="1" name="TCP" qualified="false" references="true" similarDeclarations="false" stamp="1371580607009" textual="false" version="1.0"/>
+</session>

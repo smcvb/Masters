@@ -1,70 +1,195 @@
 package types;
-import java.util.ArrayList;
+
+import java.io.DataInput;
+import java.io.DataOutput;
+import java.io.IOException;
+
+import org.apache.hadoop.io.BooleanWritable;
+import org.apache.hadoop.io.DoubleWritable;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.WritableComparable;
 
 /**
- * Type class for a graph node in an 
- *  adjacency list with pagerank
- *  
+ * An object to store a node in a graph
  * @author stevenb
- * @date 03-04-2013
+ * @date 01-08-2013
  */
-public class Node {
+public class Node implements WritableComparable<Node> {
 	
-	private int nodeId;
-	private double pagerank;
-	private ArrayList<Node> adjacencyList;
+	private BooleanWritable complete, structure, mass, hasFilledList;
+	private LongWritable nodeId;
+	private DoubleWritable pagerank;
+	private LongArrayWritable adjacencyList;
 	
-	public Node(int nodeId, double pagerank, ArrayList<Node> adjacencyList){
-		this.nodeId = nodeId;
-		this.pagerank = pagerank;
-		this.adjacencyList = adjacencyList;
+	public Node() {
+		complete = new BooleanWritable(false);
+		structure = new BooleanWritable(false);
+		mass = new BooleanWritable(false);
+		hasFilledList = new BooleanWritable(false);
+		nodeId = new LongWritable(0);
+		pagerank = new DoubleWritable(0.0f);
+		adjacencyList = null;
 	}
 	
-	public Node(String nodeString){ //Parses input string to complete node-list
-		nodeString = nodeString.replaceAll("[^-a-zA-Z_0-9. \\t]", "").replaceAll("\\s+", " ");
-		String[] terms = nodeString.split("\\s");
-		if(nodeString.equals("") || terms.length < 2){
-			this.nodeId = 0;
-			this.pagerank = 0.0;
-			this.adjacencyList = new ArrayList<Node>();
-		} else {
-			this.nodeId = Integer.parseInt(terms[0]);
-			this.pagerank = Double.parseDouble(terms[1]);
-			ArrayList<Node> list = new ArrayList<Node>((terms.length - 2) / 2);
-			for(int i = 2; i < terms.length; i += 2){
-				Node node = new Node(Integer.parseInt(terms[i]), Double.parseDouble(terms[i+1]), new ArrayList<Node>());
-				list.add(node);
-			}
-			this.adjacencyList = list;
+	public LongWritable getNodeId() {
+		return nodeId;
+	}
+	
+	public void setNodeId(long nodeId) {
+		this.nodeId = new LongWritable(nodeId);
+	}
+	
+	public void setNodeId(LongWritable nodeId) {
+		this.nodeId = nodeId;
+	}
+	
+	public DoubleWritable getPagerank() {
+		return pagerank;
+	}
+	
+	public void setPagerank(double pagerank) {
+		this.pagerank = new DoubleWritable(pagerank);
+	}
+	
+	public void setPagerank(DoubleWritable pagerank) {
+		this.pagerank = pagerank;
+	}
+	
+	public LongArrayWritable getAdjacencyList() {
+		return adjacencyList;
+	}
+	
+	public void setAdjacencyList(LongArrayWritable adjacencyList) {
+		if (adjacencyList != null) {
+			hasFilledList.set(true);
+			this.adjacencyList = adjacencyList;
 		}
 	}
 	
-	public Node(){
-		this("");
-	}
-
-	public int getNodeId(){	return nodeId; }
-	public void setNodeId(int nodeId){ this.nodeId = nodeId; }
-	
-	public double getPagerank(){ return pagerank; }
-	public void setPagerank(double pagerank){ this.pagerank = pagerank; }
-	
-	public ArrayList<Node> getAdjacencyList(){ return adjacencyList; }
-	public void setAdjacencyList(ArrayList<Node> adjacencyList){ this.adjacencyList = adjacencyList; }
-	
-	public boolean containsList(){
-		return !adjacencyList.isEmpty();
+	public void setAdjacencyList(LongWritable[] adjacencyArray) {
+		if (adjacencyArray.length > 0) {
+			hasFilledList.set(true);
+			LongArrayWritable linksWritable = new LongArrayWritable(LongWritable.class);
+			linksWritable.set(adjacencyArray);
+			adjacencyList = linksWritable;
+		}
 	}
 	
-	public int adjacencyListSize(){
-		return adjacencyList.size();
+	public void setAsCompleteNode() {
+		complete.set(true);
 	}
 	
-	public String toString(){
-		return nodeId + " " + pagerank + " " + adjacencyList.toString();
+	public boolean isCompleteNode() {
+		return complete.get();
 	}
 	
-	public String structure(){
-		return pagerank + " " + adjacencyList.toString();
+	public void setAsStructureNode() {
+		structure.set(true);
+	}
+	
+	public boolean isStructureNode() {
+		return structure.get();
+	}
+	
+	public void setAsMassNode() {
+		mass.set(true);
+	}
+	
+	public boolean isMassNode() {
+		return mass.get();
+	}
+	
+	public boolean hasStructure() {
+		return hasFilledList.get();
+	}
+	
+	public String structure() {
+		if (hasFilledList.get()) {
+			return pagerank.toString() + "\t" + adjacencyList.toString();
+		}
+		else {
+			return pagerank.toString();
+		}
+	}
+	
+	@Override
+	public String toString() {
+		if (hasFilledList.get()) {
+			return nodeId.toString() + "\t" + pagerank.toString() + "\t" + adjacencyList.toString();
+		}
+		else {
+			return nodeId.toString() + "\t" + pagerank.toString();
+		}
+	}
+	
+	@Override
+	public void readFields(DataInput in) throws IOException {
+		complete.readFields(in);
+		structure.readFields(in);
+		mass.readFields(in);
+		hasFilledList.readFields(in);
+		nodeId.readFields(in);
+		pagerank.readFields(in);
+		//TODO System.out.printf("STRUCT: %b NODEID: %d PAGERANK: %f\n", structure.get(), nodeId.get(), pagerank.get());
+		if (hasFilledList.get()) {
+			adjacencyList = new LongArrayWritable(LongWritable.class);
+			adjacencyList.readFields(in);
+		}
+	}
+	
+	@Override
+	public void write(DataOutput out) throws IOException {
+		complete.write(out);
+		structure.write(out);
+		mass.write(out);
+		hasFilledList.write(out);
+		nodeId.write(out);
+		pagerank.write(out);
+		if (hasFilledList.get()) {
+			adjacencyList.write(out);
+		}
+	}
+	
+	@Override
+	public int hashCode() {
+		int result = nodeId != null ? nodeId.hashCode() : 0;
+		result = 163 * result + (pagerank != null ? pagerank.hashCode() : 0);
+		result = 163 * result + (adjacencyList != null ? adjacencyList.hashCode() : 0);
+		return result;
+	}
+	
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) {
+			return true;
+		}
+		if (o == null || getClass() != o.getClass()) {
+			return false;
+		}
+		Node n = (Node) o;
+		if (nodeId != null ? !nodeId.equals(n.getNodeId()) : n.getNodeId() != null) {
+			return false;
+		}
+		if (pagerank != null ? !pagerank.equals(n.getPagerank()) : n.getPagerank() != null) {
+			return false;
+		}
+		if (adjacencyList != null ? !adjacencyList.equals(n.getAdjacencyList()) : n.getAdjacencyList() != null) {
+			return false;
+		}
+		return true;
+	}
+	
+	@Override
+	public int compareTo(Node n) {
+		int cmp = nodeId.compareTo(n.getNodeId());
+		if (cmp != 0) {
+			return cmp;
+		}
+		cmp = pagerank.compareTo(n.getPagerank());
+		if (cmp != 0) {
+			return cmp;
+		}
+		cmp += adjacencyList.equals(n.getAdjacencyList()) ? 0 : -1;
+		return cmp;
 	}
 }

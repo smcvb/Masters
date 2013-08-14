@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">
+<refactoring comment="Copy element &apos;TextPair.java&apos; to &apos;Hama Tests/src/(default package)&apos;&#x0A;- Original project: &apos;CooccurenceMatrix - Example 4&apos;&#x0A;- Destination element: &apos;Hama Tests/src/(default package)&apos;&#x0A;- Original element: &apos;TextPair.java&apos;" description="Copy compilation unit" destination="=Hama Tests/src&lt;" element1="/src&lt;{TextPair.java" files="0" flags="589830" folders="0" id="org.eclipse.jdt.ui.copy" policy="org.eclipse.jdt.ui.copyResources" stamp="1365666207599" units="1" version="1.0"/>
+</session>

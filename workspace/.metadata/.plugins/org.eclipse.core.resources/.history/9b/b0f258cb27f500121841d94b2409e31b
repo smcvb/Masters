@@ -1,0 +1,146 @@
+import types.Point;
+
+/**
+ * A object to hold a cluster for
+ *  the k-means algorithm
+ * @author stevenb
+ * @date 25-07-2013
+ */
+public class Cluster {
+	
+	private int index, size;
+	private Point centroid;
+	private Point[] outliers;
+	
+	public Cluster(int index, int size, Point centroid, Point[] outliers) {
+		this.index = index;
+		this.size = size;
+		this.centroid = centroid;
+		this.outliers = outliers;
+	}
+	
+	public Cluster() {
+		this(-1, 0, null, null);
+	}
+	
+	public int getIndex() {
+		return index;
+	}
+	
+	public void setIndex(int index) {
+		this.index = index;
+	}
+	
+	public int getSize() {
+		return size;
+	}
+	
+	public void setSize(int size) {
+		this.size = size;
+	}
+	
+	public Point getCentroid() {
+		return centroid;
+	}
+	
+	public void setCentroid(Point centroid) {
+		this.centroid = centroid;
+	}
+	
+	public Point[] getOutliers() {
+		return outliers;
+	}
+	
+	public void setOutliers(Point[] outliers) {
+		this.outliers = outliers;
+	}
+	
+	public void setCluster(int index, int size, Point centroid, Point[] outliers) {
+		this.index = index;
+		this.size = size;
+		this.centroid = centroid;
+		this.outliers = outliers;
+	}
+	
+	public boolean isEmpty() {
+		if (index == -1) {
+			return true;
+		}
+		return false;
+	}
+	
+	public void parseCluster(String clusterInfo, int kmeans) {
+		String[] clusterInfoValues = clusterInfo.toString().replaceAll("\\s+", " ").split("\\s+");
+		int dimensions = (clusterInfoValues.length - 2) / kmeans;
+		double[] coordinates = new double[dimensions];
+		outliers = new Point[kmeans - 1];
+		
+		System.out.printf("CLUSTER: Split line is %d long and has\n", clusterInfoValues.length); // TODO REMOVE
+		for (int j = 0; j < clusterInfoValues.length; j++) { // TODO REMOVE
+			//System.out.println("[" + clusterInfoValues[j] + "] - " + clusterInfoValues[j].length()); // TODO REMOVE
+			System.out.printf("\t%d = [%s]\n", j, clusterInfoValues[j]); // TODO REMOVE
+		} // TODO REMOVE
+		
+		try { // Parse index and size
+			index = (int) Double.parseDouble(clusterInfoValues[0]); // Use parseDouble() to make '0' parsing valid
+			size = (int) Double.parseDouble(clusterInfoValues[1]);
+		} catch (NumberFormatException e) {
+			System.err.println("Error: expected an Integer instead of " + clusterInfoValues[0] + " " + clusterInfoValues[1]);
+		}
+		System.out.printf("CLUSTER: Parsed index: %d and parsed size: %d\n", index, size); // TODO REMOVE
+		
+		if (isEmpty()) { // Empty cluster encountered, cannot parse mean and outliers
+			System.out.printf("READ-NEW-MEANS: Found an empty cluster!"); // TODO REMOVE
+			return;
+		}
+		
+		// Parse cluster centroid
+		for (int i = 2; i < 2 + dimensions; i++) {
+			try {
+				coordinates[i - 2] = Double.parseDouble(clusterInfoValues[i]);
+			} catch (NumberFormatException e) {
+				System.err.println("Error: expected a Double instead of " + clusterInfoValues[i]);
+			}
+		}
+		centroid = new Point(coordinates, new String[0]);
+		//centroid.setCoordinates(coordinates);
+		System.out.printf("CLUSTER: Parsed centroid: ");// TODO REMOVE
+		for (int i = 0; i < coordinates.length; i++) {// TODO REMOVE
+			System.out.printf("%f ", coordinates[i]);// TODO REMOVE
+		}// TODO REMOVE
+		System.out.printf("\n"); // TODO REMOVE
+		
+		// Parse clusters k - 1 outliers
+		for (int i = 0; i < kmeans - 1; i++) {
+			int start = 2 + dimensions * (i + 1), end = 2 + dimensions * (i + 2);
+			for (int j = start; j < end; j++) {
+				try {
+					coordinates[j - start] = Double.parseDouble(clusterInfoValues[j]);
+				} catch (NumberFormatException e) {
+					System.err.println("Error: expected a Double instead of " + clusterInfoValues[i]);
+				}
+			}
+			outliers[i] = new Point(coordinates, new String[0]);
+		}
+		
+		System.out.printf("READ-NEW-MEANS: New Cluster:\n\t%s", toString()); // TODO REMOVE
+	}
+	
+	@Override
+	public String toString() {
+		String s = "" + index + " " + size + " ";
+		if (centroid != null) {
+			s += "[" + centroid.toString() + " ] { ";
+		}
+		if (outliers != null) {
+			for (int i = 0; i < outliers.length; i++) {
+				if (outliers[i] != null) {
+					s += "[" + outliers[i].toString() + "] ";
+				} else {
+					s += "[ ] ";
+				}
+			}
+		}
+		return s + "}";
+	}
+}

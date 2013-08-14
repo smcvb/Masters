@@ -1,0 +1,37 @@
+package nl.vu.cs.cn.test;
+
+import junit.framework.Test;
+import junit.framework.TestSuite;
+
+public class AllTests {
+	
+	public static Test suite() {
+		TestSuite suite = new TestSuite(AllTests.class.getName());
+		//$JUnit-BEGIN$
+		suite.addTestSuite(TcpBasicSanity.class);
+		suite.addTestSuite(TcpSynLoss.class);
+		suite.addTestSuite(TcpSynAckLoss.class);
+		suite.addTestSuite(TcpAckLoss.class);
+		suite.addTestSuite(TcpReadWriteSanity.class);
+		suite.addTestSuite(TcpDataLoss.class);
+		suite.addTestSuite(TcpDataAckLoss.class);
+		suite.addTestSuite(TcpFinLoss.class);
+		suite.addTestSuite(TcpFinAckLoss.class);
+		suite.addTestSuite(TcpLargeTransfer.class);
+		suite.addTestSuite(TcpChecksumCheck.class);
+		suite.addTestSuite(TcpMismatchedBuffer.class);
+		suite.addTestSuite(TcpRandomDataLoss.class);
+		suite.addTestSuite(TcpWrapSeqNumber.class);
+		suite.addTestSuite(TcpBadWrite.class);
+		suite.addTestSuite(TcpAckInjection.class);
+		suite.addTestSuite(TcpCorruptData.class);
+		suite.addTestSuite(TcpCorruptSeqNumber.class);
+		suite.addTestSuite(TcpCorruptAckNumber.class);
+		suite.addTestSuite(TcpCorruptFlags.class);
+		suite.addTestSuite(TcpCorruptIPLengthLonger.class);
+		suite.addTestSuite(TcpCorruptIPLengthShorter.class);
+		//$JUnit-END$
+		return suite;
+	}
+	
+}

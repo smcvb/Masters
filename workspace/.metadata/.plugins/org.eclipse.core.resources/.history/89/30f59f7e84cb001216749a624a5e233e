@@ -1,0 +1,136 @@
+package nl.vu.cs.cn;
+
+import java.io.IOException;
+
+import nl.vu.cs.cn.IP.IpAddress;
+
+/**
+ * @author Steven van Beelen, 1821806
+ * 
+ * This class represents a TCP stack. It should be built on top of the IP stack
+ * 	which is bound to a given IP address.
+ */
+public class TCP extends TcpUnlocked {
+	
+	/****************************************************************************************
+	 * 								Connecting/Socket Class/Methods 						*
+	 ****************************************************************************************/
+	
+	/**
+	 * This class represents a TCP socket.
+	 */
+	public class Socket extends TcpUnlocked.Socket {
+		
+		public int port;
+		
+		/**
+		 * Construct a client socket.
+		 */
+		private Socket() {
+			super();
+			
+		}
+		
+		/**
+		 * Construct a server socket bound to the given local port.
+		 *
+		 * @param port the local port to use
+		 */
+		private Socket(int port) {
+			super(port);
+			this.port = port;
+		}
+		
+		/**
+		 * Connect this socket to the specified destination and port.
+		 * The client will perform a connect request
+		 *
+		 * @param dest_ipaddr the destination to connect to
+		 * @param port the port to connect to
+		 * @return true if the connect succeeded.
+		 */
+		@Override
+		public boolean connect(IpAddress dest_ipaddr, int port) {
+			return super.connect(dest_ipaddr, port);
+		}
+		
+		/**
+		 * Accept a connection on this socket.
+		 * This call blocks until a connection is made.
+		 * The server will wait in the accept method for a connect request
+		 */
+		@Override
+		public void accept() {
+			super.accept();
+		}
+		
+		/**
+		 * Reads bytes from the socket into the buffer.
+		 * This call is not required to return maxlen bytes
+		 * every time it returns.
+		 *
+		 * @param buf the buffer to read into
+		 * @param offset the offset to begin reading data into
+		 * @param maxlen the maximum number of bytes to read
+		 * @return the number of bytes read, or -1 if an error occurs.
+		 */
+		@Override
+		public int read(byte[] buf, int offset, int maxlen) {
+			return super.read(buf, offset, maxlen);
+		}
+		
+		/**
+		 * Writes to the socket from the buffer.
+		 *
+		 * @param buf the buffer to
+		 * @param offset the offset to begin writing data from
+		 * @param len the number of bytes to write
+		 * @return the number of bytes written or -1 if an error occurs.
+		 */
+		@Override
+		public int write(byte[] buf, int offset, int len) {
+			return super.write(buf, offset, len);
+		}
+		
+		/**
+		 * Closes the connection for this socket.
+		 * Blocks until the connection is closed.
+		 *
+		 * @return true unless no connection was open.
+		 * @throws InterruptedException 
+		 */
+		@Override
+		public boolean close() throws InterruptedException {
+			return super.close();
+		}
+	}
+	
+	/**
+	* Constructs a TCP stack for the given virtual address.
+	* The virtual address for this TCP stack is then
+	* 192.168.1.address.
+	*
+	* @param address The last octet of the virtual IP address 1-254.
+	* @throws IOException if the IP stack fails to initialize.
+	*/
+	public TCP(int address) throws IOException {
+		super(address);
+	}
+	
+	/**
+	* @return a new socket for this stack
+	*/
+	@Override
+	public Socket socket() {
+		return new Socket();
+	}
+	
+	/**
+	* @return a new server socket for this stack bound to the given port
+	* @param port the port to bind the socket to.
+	*/
+	@Override
+	public Socket socket(int port) {
+		return new Socket(port);
+	}
+}

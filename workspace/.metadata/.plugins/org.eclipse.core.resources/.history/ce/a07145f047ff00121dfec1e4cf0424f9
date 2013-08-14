@@ -1,0 +1,48 @@
+import java.io.BufferedReader;
+import java.io.FileReader;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Iterator;
+
+
+public class ParseCities {
+	
+	private ArrayList<String> cities;
+	
+	public ParseCities() {
+		cities = new ArrayList<String>();
+	}
+	
+	public void run(String[] args) throws IOException {
+		String filename = "", line = "", previousCountry = "";
+		if (args.length < 2) {
+			System.err.println("Error: to few arguments given");
+			System.exit(0);
+		}
+		filename = args[0];
+		
+		BufferedReader br = new BufferedReader(new FileReader(filename));
+		while ((line = br.readLine()) != null) {
+			String[] terms = line.split("\\s+");
+			if (terms[0].equals(previousCountry)) {
+				cities.add(line);
+			} else {
+				Iterator cityIterator = cities.iterator(); 
+				while(cityIterator.hasNext()){
+					
+					
+				}
+				previousCountry = terms[0];
+			}
+		}
+	}
+	
+	public static void main(String[] args) {
+		try {
+			new ParseCities().run(args);
+		} catch (IOException e) {
+			e.printStackTrace();
+			System.exit(0);
+		}
+	}
+}

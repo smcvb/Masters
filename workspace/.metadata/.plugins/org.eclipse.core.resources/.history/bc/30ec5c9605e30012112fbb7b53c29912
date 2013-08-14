@@ -1,0 +1,89 @@
+package nl.vu.cs.cn;
+
+import java.nio.ByteBuffer;
+
+/**
+ * @author Steven van Beelen, 1821806
+ * @coauthor Gerben Rozie
+ *
+ * This class serves as the TCP header part of
+ * 	a TCP segment.
+ * Thus, it holds al the information a TCP Header should have
+ * 	following from the known specification.
+ */
+public class TcpHeader {
+	
+	public short src_port;
+	public short dest_port;
+	public int seqnum;
+	public int acknum;
+	public byte data_offset;
+	public byte flags;
+	public short window_size;
+	public short checksum;
+	public short urg_pointer;
+	
+	/**
+	 * Construct a TCP Header
+	 * 
+	 * @param src_port: The source port number of this packet
+	 * @param dest_port: The destination port number of this packet
+	 * @param seqnum: The sequence number of this packet
+	 * @param acknum: The acknowledgment number of this packet
+	 * @param data_offset: The data offset of were the data begins in this packet
+	 * @param flags: The flags set for this packet
+	 * @param window_size: The window_size for this packet
+	 * @param checksum: The checksum computed for this packet
+	 * @param urg_pointer: The pointer for the urgent data of this packet
+	 */
+	public TcpHeader(short src_port, short dest_port, int seqnum, int acknum, byte data_offset, byte flags,
+			short window_size, short checksum, short urg_pointer) {
+		this.src_port = src_port;
+		this.dest_port = dest_port;
+		this.seqnum = seqnum;
+		this.acknum = acknum;
+		this.data_offset = data_offset;
+		this.flags = flags;
+		this.window_size = window_size;
+		this.checksum = checksum;
+		this.urg_pointer = urg_pointer;
+	}
+	
+	/**
+	 * Default TCP Header constructor
+	 */
+	public TcpHeader() {
+		this((short) 0, (short) 0, 0, 0, (byte) 0, (byte) 0, (short) 0, (short) 0, (short) 0);
+	}
+	
+	/**
+	 * The length of a TCP Header consists of:
+	 * 	Five Short values: src_port, dest_port, window_size, checksum and urg_pointer
+	 * 	Two Integer values: seqnum and acknum
+	 * 	TWo Byte values: data_offset and flags
+	 * @return the number of bytes as an integer of this tcp header
+	 */
+	public int length() {
+		return (Short.SIZE * 5 + Integer.SIZE * 2 + Byte.SIZE * 2) / 8;
+	}
+	
+	/**
+	 * @return returns a byte array from this tcpheader
+	 */
+	public byte[] getByteArray() throws java.io.IOException {
+		ByteBuffer bb = ByteBuffer.allocate(20);
+		
+		bb.putShort(src_port);
+		bb.putShort(dest_port);
+		bb.putInt(seqnum);
+		bb.putInt(acknum);
+		bb.put(data_offset);
+		bb.put(flags);
+		bb.putShort(window_size);
+		bb.putShort(checksum);
+		bb.putShort(urg_pointer);
+		bb.rewind();
+		
+		return bb.array();
+	}
+}

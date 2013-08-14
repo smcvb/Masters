@@ -1,0 +1,209 @@
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map.Entry;
+
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.io.IntWritable;
+import org.apache.hadoop.io.LongWritable;
+import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.WritableComparable;
+import org.apache.hadoop.io.WritableComparator;
+import org.apache.hadoop.mapreduce.Job;
+import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Reducer;
+import org.apache.hadoop.mapreduce.Partitioner;
+import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.input.FileSplit;
+import org.apache.hadoop.mapreduce.lib.input.TextInputFormat;
+import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
+import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
+
+import types.TextIntPair;
+import types.TextIntPairArrayWritable;
+import types.TextPair;
+
+public class InvertedIndex {
+	
+	public static final int REDUCE_TASKS = 5;
+	
+	public static class Map extends Mapper<LongWritable, Text, TextPair, IntWritable>{
+		
+		private HashMap<String, Integer> postingTupleMap = new HashMap<String, Integer>();
+		int counter = 0;
+		String filename;
+		
+		public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
+			FileSplit file = (FileSplit)context.getInputSplit();
+			String term = "",
+					line = value.toString();
+			filename = file.getPath().getName().toString();
+			String[] terms = line.split("\\s");
+			counter++;
+			System.out.printf("MAPPER: Filename%d = %s\n", counter, filename);//REMOVE
+			
+			for(int i = 0; i < terms.length; i++){
+				term = terms[i].toLowerCase();
+				postingTupleMap.put(term, (postingTupleMap.containsKey(term) ? postingTupleMap.get(term) + 1 : 1)); 
+			}
+		}
+		
+		public void cleanup(Context context){
+			for(Entry<String, Integer> entry : postingTupleMap.entrySet()){
+				TextPair tuple = new TextPair(entry.getKey(), filename);
+				IntWritable frequency = new IntWritable(entry.getValue());
+				System.out.printf("MAPPER: Term: %s Frequency: %s\n", tuple.getTerm(), frequency.get());
+				try {
+					context.write(tuple, frequency);
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (InterruptedException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+			}
+		}
+	}
+	
+	public static class SortComparator extends WritableComparator {
+		
+		protected SortComparator() {
+			super(TextPair.class, true);
+		}
+		
+		@Override
+		public int compare(WritableComparable w1, WritableComparable w2) {
+			TextPair tp1 = (TextPair) w1;
+			TextPair tp2 = (TextPair) w2;
+			int cmp = tp1.getTerm().compareTo(tp2.getTerm());
+			if (cmp != 0) {
+				return cmp;
+			}
+			return tp1.getDocid().compareTo(tp2.getDocid());
+		}
+	}
+	
+	public static class GroupComparator extends WritableComparator {
+		
+		protected GroupComparator() {
+			super(TextPair.class, true);
+		}
+		
+		@Override
+		public int compare(WritableComparable w1, WritableComparable w2) {
+			TextPair tp1 = (TextPair) w1;
+			TextPair tp2 = (TextPair) w2;
+			return tp1.compareTo(tp2);
+		}
+	}
+
+	public static class Partition extends Partitioner<TextPair, IntWritable>{
+		public int getPartition(TextPair tuple, IntWritable count, int numPartitions) {
+			if(numPartitions == 0)
+				return 0;
+			Text term = tuple.getTerm();
+			return ((term.hashCode() & Integer.MAX_VALUE) % numPartitions);
+		}
+	}
+	
+	public static class Reduce extends Reducer<TextPair, IntWritable, Text, TextIntPairArrayWritable>{
+		
+		private String currentTerm, previousTerm;
+		private TextIntPair posting;
+		private ArrayList<TextIntPair> postingsList;
+		private TextIntPairArrayWritable writablePostings;
+		
+		public void setup(Context context){
+			currentTerm = "";
+			previousTerm = "";
+			posting = new TextIntPair();
+			postingsList = new ArrayList<TextIntPair>();
+			writablePostings = new TextIntPairArrayWritable(TextIntPair.class);
+		}
+		
+		int counter = 0;
+		
+		public void reduce(TextPair key, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException {
+			currentTerm = key.getTerm().toString();
+			if(!currentTerm.equals(previousTerm)){
+				System.out.printf("Term: %s | Occured %d times in: %d documents\n", previousTerm, values.iterator().next().get(), counter);
+				counter = 0;
+			}
+			counter++;
+			Iterator<IntWritable> iterator = values.iterator();
+			int c = 0;
+			IntWritable freq = new IntWritable(0);
+			while(iterator.hasNext()){
+				System.out.printf("%d ", c);
+				c++;
+				freq = iterator.next();
+			}
+			System.out.printf("\nTerm: %s | Occured %d in DocumentID %s\n", currentTerm, freq.get(), key.getDocid().toString());
+			previousTerm = currentTerm;
+		}
+		
+		/*public void reduce(TextPair key, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException {
+			currentTerm = key.getTerm().toString();
+			if(!currentTerm.equals(previousTerm)){
+				LongIntPair[] postingsArray = new LongIntPair[postingsList.size()];
+				postingsArray = postingsList.toArray(postingsArray);
+				writablePostings.set(postingsArray);
+				context.write(new Text(previousTerm), writablePostings);
+			}
+			posting.set(key.getDocid(), values.iterator().next());
+			postingsList.add(posting);
+			previousTerm = currentTerm;
+		}
+		
+		public void cleanup(Context context) throws IOException, InterruptedException {
+			LongIntPair[] postingsArray = new LongIntPair[postingsList.size()];
+			postingsArray = postingsList.toArray(postingsArray);
+			writablePostings.set(postingsArray);
+			context.write(new Text(previousTerm), writablePostings);
+		}*/
+	}
+	
+	public static void printUsage(int argLength){
+		if(argLength < 2) {
+			System.out.println("usage:\t <input path> <output path> <number of reduce tasks [default 5]>");
+			System.exit(-1);
+		}
+	}
+	
+	public static Job createJob(String[] args, Configuration conf) throws IOException {
+		printUsage(args.length);
+		
+		Job job = new Job(conf, "Inverted Indexing");
+		job.setJarByClass(InvertedIndex.class);
+		FileInputFormat.setInputPaths(job, new Path(args[0]));	//Input settings
+		job.setInputFormatClass(TextInputFormat.class);
+		FileOutputFormat.setOutputPath(job, new Path(args[1]));	//Ouput settings
+		job.setOutputFormatClass(TextOutputFormat.class);
+		job.setOutputKeyClass(TextPair.class);
+		job.setOutputValueClass(IntWritable.class);
+		job.setMapperClass(Map.class);							//Class settings
+		job.setSortComparatorClass(SortComparator.class);
+		job.setGroupingComparatorClass(GroupComparator.class);
+		job.setPartitionerClass(Partition.class);
+		job.setReducerClass(Reduce.class);
+		
+		if(args.length > 2)
+			job.setNumReduceTasks(Integer.parseInt(args[2]));
+		if(args.length == 2)
+			job.setNumReduceTasks(REDUCE_TASKS);
+		
+		return job;
+	}
+	
+	public static void main(String[] args) throws Exception {
+		Configuration conf = new Configuration();
+		Job job = createJob(args, conf);
+		
+		long startTime = System.currentTimeMillis();
+		if (job.waitForCompletion(true))
+			System.out.println("Job Finished in " + (System.currentTimeMillis() - startTime) / 1000.0 + " seconds");
+	}
+}

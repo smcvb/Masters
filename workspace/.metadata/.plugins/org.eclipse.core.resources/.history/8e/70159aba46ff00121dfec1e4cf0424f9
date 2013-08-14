@@ -1,0 +1,16 @@
+
+
+public class ParseCities {
+	
+	public ParseCities() {
+		
+	}
+	
+	public void run(String[] args){
+		
+	}
+	
+	public static void main(String[] args){
+		new ParseCities().run(args);
+	}
+}

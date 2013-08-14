@@ -7,6 +7,12 @@ import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.io.WritableComparable;
 
+/**
+ * An object to store a combination of a
+ *  Text and a IntWritable
+ * @author stevenb
+ * @date 01-08-2013
+ */
 public class TextIntPair implements WritableComparable<TextIntPair> {
 	
 	private Text docid;

@@ -1,0 +1,54 @@
+package nl.vu.cs.cn;
+
+import java.io.IOException;
+
+import nl.vu.cs.cn.IP.IpAddress;
+import nl.vu.cs.cn.TCP2.Socket2;
+
+public class TCP {
+	private TCPImplementation tcp;
+	
+	public class Socket {
+		private SocketImplementation sock;
+		
+		private Socket() {
+			sock = tcp.socket();
+		}
+		
+		private Socket(int port) {
+			sock = tcp.socket(port);
+		}
+		
+		public boolean connect(IpAddress dest_ipaddr, int port) {
+			return sock.connect(dest_ipaddr, port);
+		}
+		
+		public void accept() {
+			sock.accept();
+		}
+		
+		public int write(byte[] buf, int offset, int len) {
+			return sock.write(buf, offset, len);
+		}
+		
+		public int read(byte[] buf, int offset, int maxlen) {
+			return sock.read(buf, offset, maxlen);
+		}
+		
+		public boolean close() {
+			return sock.close();
+		}
+	}
+	
+	public TCP(int address) throws IOException {
+		tcp = new TCP2(address);
+	}
+	
+	public Socket socket() {
+		return new Socket();
+	}
+	
+	public Socket socket(int port) {
+		return new Socket(port);
+	}
+}
