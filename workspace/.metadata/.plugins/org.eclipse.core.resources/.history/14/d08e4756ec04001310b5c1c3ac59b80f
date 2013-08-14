@@ -177,7 +177,7 @@ public class KMeans extends Configured implements Tool {
 		 */
 		private void assignPoints(BSPPeer<LongWritable, Text, IntWritable, Text, ClusterMessage> peer) throws IOException {
 //			System.out.println(":assignpoints: " + peerName + "-" + round); //TODO REMOVE
-			int send = 0; // TODO REMOVE
+//			int send = 0; // TODO REMOVE
 			double dist = 0.0, minDist = Double.MAX_VALUE;
 			String name = "";
 			String[] clusterNames = peer.getAllPeerNames();
@@ -211,6 +211,7 @@ public class KMeans extends Configured implements Tool {
 		 */
 		private void updateCluster(BSPPeer<LongWritable, Text, IntWritable, Text, ClusterMessage> peer) throws IOException {
 //			System.out.println(":updatecluster: " + peerName + "-" + round); //TODO REMOVE
+			me.setSize(points.size()); // set Size
 			recalculateMean(peer); // set Centroid
 			setOutliers(peer); // set Outliers
 			broadcastClusterInfo(peer); // Send your cluster info around
@@ -229,14 +230,13 @@ public class KMeans extends Configured implements Tool {
 			for (Point point : points) {
 				if (size == 0) {
 					newCentroid.setCoordinates(point.getCoordinates());
-					me.setDimensions(newCentroid.getCoordinates().length); // set the number of Dimensions
+					me.setDimensions(newCentroid.getCoordinates().length);
 				} else {
 					newCentroid.add(point);
 				}
 				size++;
 			}
 			newCentroid.divide(size);
-			me.setSize(size); // set the size
 			me.setCentroid(newCentroid);
 		}
 		

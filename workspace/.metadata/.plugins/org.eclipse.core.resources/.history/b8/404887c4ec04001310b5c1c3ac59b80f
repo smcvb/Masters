@@ -229,14 +229,14 @@ public class KMeans extends Configured implements Tool {
 			for (Point point : points) {
 				if (size == 0) {
 					newCentroid.setCoordinates(point.getCoordinates());
-					me.setDimensions(newCentroid.getCoordinates().length); // set the number of Dimensions
+					me.setDimensions(newCentroid.getCoordinates().length);
 				} else {
 					newCentroid.add(point);
 				}
 				size++;
 			}
 			newCentroid.divide(size);
-			me.setSize(size); // set the size
+			me.setSize(size);
 			me.setCentroid(newCentroid);
 		}
 		

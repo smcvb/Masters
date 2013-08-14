@@ -243,7 +243,7 @@ public class KMeans extends Configured implements Tool {
 				context.getCounter(ReduceCounters.POINTS).increment(1);
 			}
 			//System.out.printf("REDUCE-CALC-DIV:\n\tNewMean: %s %s / %d =\n", recalculatedClusterMean.toString(), recalculatedClusterMean.nonNumericalValuesToString(), i); // TODO REMOVE
-			recalculatedClusterMean.divide(size); // divide by 'size' to get there mean
+			recalculatedClusterMean.divide(size); // divide by 'i' to get there mean
 			//System.out.printf("\t %s %s\n", recalculatedClusterMean.toString(), recalculatedClusterMean.nonNumericalValuesToString()); // TODO REMOVE
 			
 			// Set new cluster
