@@ -1,5 +1,4 @@
 import java.io.BufferedWriter;
-import java.io.EOFException;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
 import java.util.Arrays;
@@ -35,7 +34,7 @@ import types.Point;
 /**
  * Hadoop program to run the k-means algorithm
  * @author stevenb
- * @date 13-08-2013
+ * @date 02-09-2013
  */
 public class KMeans extends Configured implements Tool {
 	
@@ -45,7 +44,7 @@ public class KMeans extends Configured implements Tool {
 	}
 	
 	public static enum ReduceCounters { // Counters used for the Reduce tasks
-		POINTS, TOTAL_READS, TOTAL_WRITES
+		POINTS, TOTAL_READS, TOTAL_WRITES,
 	}
 	
 	public static final float CONVERGENCE_POINT = 0.01f;
@@ -64,17 +63,16 @@ public class KMeans extends Configured implements Tool {
 			clusters = new Cluster[conf.getInt("kmeans", 0)];
 			partialClusterMeanMap = new HashMap<Integer, Point>();
 			
-			// Not the first iteration | May use previously found cluster means
+			// Not the first iteration | Use previously found cluster means
 			if (!conf.getBoolean("FirstIteration", true)) {
-				//System.out.printf("SETUP: Iteration N + 1\n"); // TODO remove
 				meanPath = conf.get("means");
 				FileSystem fs = FileSystem.get(conf);
+				
 				for (FileStatus f : fs.listStatus(new Path(meanPath))) {
 					// Read a line from the path direction
 					LineReader reader = new LineReader(fs.open(f.getPath()));
 					Text clusterInfo = new Text();
 					reader.readLine(clusterInfo);
-					//System.out.printf("SETUP: Line %s\n", clusterInfoText.toString()); // TODO REMOVE
 					
 					// Parse the line to a cluster
 					Cluster cluster = new Cluster();
@@ -89,16 +87,7 @@ public class KMeans extends Configured implements Tool {
 					reader.close();
 				}
 				
-//				for (int i = 0; i < clusters.length; i++) { // TODO REMOVE
-//					if (clusters[i] != null) { // TODO REMOVE
-//						System.out.printf("SETUP: Cluster Mean/Centroid:\n\t%s\n", clusters[i].toString()); // TODO REMOVE
-//					} else { // TODO REMOVE
-//						System.out.printf("SETUP: Empty cluster encountered on index %d\n", i); // TODO REMOVE
-//					} // TODO REMOVE
-//				} // TODO REMOVE
-				
 				if (emptyCluster > 0) {
-//					System.out.printf("READ-NEW-MEANS: going to fill empty spots in cluster\n"); // TODO REMOVE
 					clusters = selectNewClusters(clusters, emptyCluster);
 				}
 			}
@@ -115,10 +104,10 @@ public class KMeans extends Configured implements Tool {
 		 * @return a Cluster array object with no empty clusters
 		 */
 		private Cluster[] selectNewClusters(Cluster[] clusters, int numEmptyClusters) {
-			System.out.printf("SELECT_NEW_CLUSTERS: Found %d empty cluster spots, will fill these!\n", numEmptyClusters); // TODO REMOVE
 			int i = 0;
 			int[] emptyIndexes = new int[numEmptyClusters];
 			Cluster largestCluster = new Cluster();
+			
 			for (int k = 0; k < clusters.length; k++) {
 				// Find the indexes of the empty clusters
 				if (clusters[k] == null) {
@@ -134,9 +123,10 @@ public class KMeans extends Configured implements Tool {
 			Point[] outliers = largestCluster.getOutliers();
 			for (int j = 0; j < numEmptyClusters; j++) {
 				Cluster newCluster = new Cluster();
-				newCluster.setCluster(emptyIndexes[j], 1, largestCluster.getDimensions(), outliers[j], new Point[0]);
+				if (j <= outliers.length) {
+					newCluster.setCluster(emptyIndexes[j], 1, largestCluster.getDimensions(), outliers[j], new Point[0]);
+				}
 				clusters[newCluster.getIndex()] = newCluster;
-//				System.out.printf("SELECT_NEW_CLUSTERS: Filled %d with cluster %s\n", newCluster.getIndex(), newCluster.toString()); // TODO REMOVE
 			}
 			
 			return clusters;
@@ -144,38 +134,38 @@ public class KMeans extends Configured implements Tool {
 		
 		@Override
 		public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
-			int clusterIndex = -1; // Integer representing the index number of the cluster mean the point belongs to
-			double minDist = Double.MAX_VALUE, dist = 0.0;
 			String[] lines = value.toString().split("\n");
 			points = new Point[lines.length]; // Initialize the number of Points this mapper will work through
+			Random random = new Random();
 			Configuration conf = context.getConfiguration();
 			
 			// Start reading in a line and converting it to a Point object
 			for (int i = 0; i < lines.length; i++) {
-				//System.out.printf("MAP-READ:\n\tLine: %s\n", lines[i]); // TODO REMOVE
 				points[i] = new Point(lines[i]);
-				//System.out.printf("\tPoint: %s %s\n", points[i].toString(), points[i].nonNumericalValuesToString()); // TODO REMOVE
 				context.getCounter(MapCounters.POINTS).increment(1);
 			}
 			
 			// Compute the Euclidean distances between all the point/mean combinations
 			for (Point point : points) {
+				int clusterIndex = -1; // Integer representing the index number of the cluster mean the point belongs to
+				double minDist = Double.MAX_VALUE, dist = 0.0;
+				
 				if (!conf.getBoolean("FirstIteration", true)) {
 					for (int k = 0; k < clusters.length; k++) {
-						dist = point.calculateDistance(clusters[k].getCentroid());
-						//						System.out.printf("MAP-CALC: Distance: %f\n\tPoint: %s\n\tMean: %s", dist, point.toString(), clusterMeans[k].toString()); // TODO REMOVE
+						Cluster c = clusters[k];
+						dist = point.calculateDistance(c.getCentroid());
+						
 						if (dist < minDist) {
 							minDist = dist;
 							clusterIndex = k;
 						}
 					}
 				} else { // Appoint a random cluster index to a point if it is the first iteration
-					Random random = new Random();
 					clusterIndex = random.nextInt(context.getConfiguration().getInt("kmeans", 0));
 				}
-				//System.out.printf("MAP-CALC: Point %s has MeanIndex %d\n", point.toString(), clusterIndex); // TODO REMOVE
 				
-				if (conf.getBoolean("combine", true)) { // In mapper combine by calculating the partial mean of the cluster
+				// In mapper combine by calculating the partial mean of the cluster
+				if (conf.getBoolean("combine", true)) {
 					if (partialClusterMeanMap.containsKey(clusterIndex)) {
 						Point partialClusterMean = partialClusterMeanMap.get(clusterIndex);
 						partialClusterMean.add(point);
@@ -187,13 +177,17 @@ public class KMeans extends Configured implements Tool {
 					}
 				}
 				else { // Regular Mapper task, thus just write the found index and point
-//					System.out.printf("MAP-WRITE: index: %d point: %s %s\n", clusterIndex, point.toString(), point.nonNumericalValuesToString()); // TODO REMOVE
 					context.write(new IntWritable(clusterIndex), point);
 					context.getCounter(MapCounters.TOTAL_WRITES).increment(1);
 				}
 			}
 		}
 		
+		/**
+		 * Combine the points to send to every cluster
+		 *  to minimize the IO between the map and reduce
+		 *  step.
+		 */
 		@Override
 		public void cleanup(Context context) throws IOException, InterruptedException {
 			if (context.getConfiguration().getBoolean("combine", true)) { // Can only perform a cleanup on the HashMap if the in mapper combiner was set
@@ -226,48 +220,54 @@ public class KMeans extends Configured implements Tool {
 		@Override
 		public void reduce(IntWritable key, Iterable<Point> values, Context context) throws IOException, InterruptedException {
 			for (Point value : values) { // Repeat to find the new mean
-//				System.out.printf("REDUCE-READ: Point %s %s\n", value.toString(), value.nonNumericalValuesToString()); // TODO REMOVE
 				if (size == 0) {
 					recalculatedClusterMean.setCoordinates(value.getCoordinates()); // The first value, hence initialize the clusterMean object
 					dimensions = value.getCoordinates().length; // and the dimensions for the cluster
 				}
 				else {
-					//System.out.printf("REDUCE-CALC-ADD:\n\tNewMean: %s %s +\n\tPoint %s %s =\n", recalculatedClusterMean.toString(), recalculatedClusterMean.nonNumericalValuesToString(), value.toString(), value.nonNumericalValuesToString()); // TODO REMOVE
 					recalculatedClusterMean.add(value); // Add both points together
-					//System.out.printf("\t %s %s\n", recalculatedClusterMean.toString(), recalculatedClusterMean.nonNumericalValuesToString()); // TODO REMOVE
 				}
+				
 				size++;
 				context.write(key, value);
 				context.getCounter(ReduceCounters.TOTAL_WRITES).increment(1);
 				context.getCounter(ReduceCounters.TOTAL_READS).increment(1);
 				context.getCounter(ReduceCounters.POINTS).increment(1);
 			}
-			//System.out.printf("REDUCE-CALC-DIV:\n\tNewMean: %s %s / %d =\n", recalculatedClusterMean.toString(), recalculatedClusterMean.nonNumericalValuesToString(), i); // TODO REMOVE
 			recalculatedClusterMean.divide(size); // divide by 'size' to get there mean
-			//System.out.printf("\t %s %s\n", recalculatedClusterMean.toString(), recalculatedClusterMean.nonNumericalValuesToString()); // TODO REMOVE
 			
 			// Set new cluster
 			recalculatedCluster.setCluster(key.get(), size, dimensions, recalculatedClusterMean, new Point[0]);
 		}
 		
+		/**
+		 * Write the clusters to a separate
+		 *  file for the next iterations and
+		 *  to check for convergence.
+		 */
 		@Override
 		public void cleanup(Context context) throws IOException {
 			Configuration conf = context.getConfiguration();
 			FileSystem fs = FileSystem.get(conf);
-			// Set the writer/stream
-			Path meanPath = new Path(conf.get("outlierlessMeans") + "/" + conf.get("mapred.task.id"));
+			
+			Path meanPath = new Path(conf.get("outlierlessMeans") + "/" + conf.get("mapred.task.id")); // Set the writer/stream
 			FSDataOutputStream out = fs.create(meanPath, false);
 			BufferedWriter bwr = new BufferedWriter(new OutputStreamWriter(out));
-			// Write the cluster information
-//			System.out.printf("CLEANUP: Going to write new center\n\t%s\n\tto a file...\n", recalculatedCluster.toString()); // TODO REMOVE
-			bwr.write(recalculatedCluster.toString());
-			// Flush and close the writer/stream
-			bwr.flush();
+			bwr.write(recalculatedCluster.toString()); // Write the cluster information
+			bwr.flush(); // Flush and close the writer/stream
 			bwr.close();
 			out.close();
 		}
 	}
 	
+	/**
+	 * Map task to compute the outliers of a
+	 *  regular KMeans clustering iterations.
+	 * Useful in case a map task has created 
+	 *  an empty cluster. In that case, a new
+	 *  centroid must be picked, of which the
+	 *  Farthest outliers are the most appropriate.
+	 */
 	public static class MapOutliers extends Mapper<LongWritable, Text, NullWritable, NullWritable> {
 		
 		private boolean firstRound;
@@ -292,14 +292,12 @@ public class KMeans extends Configured implements Tool {
 			clusters = new Cluster[kmeans];
 			recalculatedCluster = new Cluster();
 			
-			//System.out.printf("SETUP: Iteration N + 1\n"); // TODO remove
 			FileSystem fs = FileSystem.get(conf);
 			for (FileStatus f : fs.listStatus(meanPath)) {
 				// Read a line from the path direction
 				LineReader reader = new LineReader(fs.open(f.getPath()));
 				Text clusterInfo = new Text();
 				reader.readLine(clusterInfo);
-//				System.out.printf("SETUP2: Line %s\n", clusterInfo.toString()); // TODO REMOVE
 				
 				// Parse the line to a cluster
 				Cluster cluster = new Cluster();
@@ -313,9 +311,14 @@ public class KMeans extends Configured implements Tool {
 			}
 		}
 		
+		/**
+		 * Calculate the outliers of
+		 *  every cluster.
+		 */
 		@Override
 		public void map(LongWritable key, Text value, Context context) throws IOException, InterruptedException {
 			String[] lines = value.toString().split("\n");
+			
 			for (int i = 0; i < lines.length; i++) {
 				// Parse the point and select its cluster
 				String[] lineTerms = lines[i].split("\\s+");
@@ -324,6 +327,7 @@ public class KMeans extends Configured implements Tool {
 				} catch (NumberFormatException e) {
 					System.err.println("Error: expected an Integer instead of " + lineTerms[0]);
 				}
+				
 				String potentialOutlierString = "";
 				for (int j = 1; j < lineTerms.length; j++) {
 					potentialOutlierString += lineTerms[j] + " ";
@@ -343,6 +347,7 @@ public class KMeans extends Configured implements Tool {
 				boolean gotPosition = false;
 				double dist = potentialOutlier.calculateDistance(centroid);
 				Point[] newOutliers = new Point[outliers.length];
+				
 				for (int k = 0; k < outliers.length; k++) {
 					if (!gotPosition) {
 						newOutliers[k] = outliers[k];
@@ -354,63 +359,52 @@ public class KMeans extends Configured implements Tool {
 						newOutliers[k] = outliers[k - 1];
 					}
 				}
+				
 				outliers = Arrays.copyOf(newOutliers, newOutliers.length);
 			}
 		}
 		
+		/**
+		 * Write the new clusters with
+		 *  their outliers to a file.
+		 */
 		@Override
 		public void cleanup(Context context) throws IOException {
-			// Set the cluster again, but now with outliers
 			recalculatedCluster.setCluster(index, size, dimensions, centroid, outliers);
-//			System.out.printf("MAPOUTLIERS: Just set the new cluster\n"); // TODO REMOVE
-			
 			Configuration conf = context.getConfiguration();
 			FileSystem fs = FileSystem.get(conf);
-			// Set the writer/stream
-			Path meanPath = new Path(conf.get("means") + "/" + conf.get("mapred.task.id"));
+			
+			Path meanPath = new Path(conf.get("means") + "/" + conf.get("mapred.task.id")); // Set the writer/stream
 			FSDataOutputStream out = fs.create(meanPath, false);
 			BufferedWriter bwr = new BufferedWriter(new OutputStreamWriter(out));
-			
-			// Write the cluster information
-//			System.out.printf("CLEANUP2: Going to write new center\n\t%s\n\tto a file...\n", recalculatedCluster.toString()); // TODO REMOVE
-			bwr.write(recalculatedCluster.toString());
-			
-			// Flush and close the writer/stream
-			bwr.flush();
+			bwr.write(recalculatedCluster.toString()); // Write the cluster information
+			bwr.flush(); // Flush and close the writer/stream
 			bwr.close();
 			out.close();
 		}
 	}
 	
 	/**
-	 * Check whether the currents cluster means
-	 *  equals the previous clusters means
-	 * @param previousClusters: Point array containing the previous
-	 * 	found cluster means
-	 * @param currentClusters: Point array containing the current
-	 * 	found cluster means
-	 * @return True: in case all the means equal
-	 * 	False: in case one or more of the cluster means
-	 * 		do not equal
+	 * Check whether the current clusters equals the 
+	 *  previous clusters.
+	 * @param oldClusters: Cluster array object containing
+	 *  the clusters from the previous round.
+	 * @param newClusters: Cluster array object containing 
+	 *  the clusters from the current round.
+	 * @return true in case all the means equal based on a 
+	 *  certain convergence point and false if they do not.
 	 */
-	private boolean checkConvergence(Cluster[] previousClusters, Cluster[] currentClusters) {
-//		System.out.printf("CONVERGENCE: Started to check for convergence...\n"); // TODO REMOVE
-		if (previousClusters.length == 0) { // if this is the first iteration/checkConvergence()  method call, then its length will be zero
-//			System.out.printf("CONVERGENCE: no previous cluster, so false\n"); // TODO REMOVE
+	private boolean checkConvergence(Cluster[] oldClusters, Cluster[] newClusters) {
+		if (oldClusters.length == 0) { // if this is the first iteration/checkConvergence()  method call, then its length will be zero
 			return false;
 		}
-		for (int k = 0; k < currentClusters.length; k++) {
-			if (previousClusters[k] == null || currentClusters[k] == null) { // Found an empty mean, hence an empty cluster
-//				System.out.printf("CONVERGENCE: empty cluster in previous set or current set, hence false\n"); // TODO REMOVE
-				return false; // Thus cannot check for convergence
-			}
-		}
 		
-		double cmp = 0.0;
-		for (int k = 0; k < previousClusters.length; k++) {
-//			System.out.printf("CONVERGENCE:\n\tPre: %s\n\tCur: %s\n", previousClusters[k].toString(), currentClusters[k].toString()); // TODO REMOVE
-			cmp += previousClusters[k].getCentroid().compareTo(currentClusters[k].getCentroid(), CONVERGENCE_POINT);
-			if (cmp != 0) {
+		for (int k = 0; k < oldClusters.length; k++) {
+			Cluster oldCluster = oldClusters[k];
+			Cluster newCluster = newClusters[k];
+			if (oldCluster == null || newCluster == null) { // Found a cluster with no points, hence no mean to compare
+				return false; // Thus cannot check for convergence
+			} else if (oldCluster.getCentroid().compareTo(newCluster.getCentroid(), CONVERGENCE_POINT) != 0) {
 				return false;
 			}
 		}
@@ -418,13 +412,12 @@ public class KMeans extends Configured implements Tool {
 	}
 	
 	/**
-	 * Retrieve the recalculated cluster means from the reduce job
-	 *  for sending them through convergence checking
+	 * Retrieve the new clusters from the filesystem to check
+	 *  for convergence.
 	 * @param conf: A Configuration object containing the Map/Reduce 
 	 * 	job configurations
 	 * @param kmeans: Number of clusters means k as an integer
-	 * @return: A Point array object containing the recalculated
-	 * 	cluster means
+	 * @return: A Cluster array object containing the new clusters
 	 * @throws IOException for errors in a FileSystem operation
 	 */
 	private Cluster[] getClusters(Configuration conf, int kmeans) throws IOException {
@@ -440,11 +433,10 @@ public class KMeans extends Configured implements Tool {
 					LineReader reader = new LineReader(fs.open(f.getPath()));
 					Text clusterInfo = new Text();
 					reader.readLine(clusterInfo);
-//					System.out.printf("GETCLUSTERS: Line %s\n", clusterInfo.toString()); // TODO REMOVE
 					
 					// Read in a new cluster
 					Cluster cluster = new Cluster();
-					cluster.parseCluster(clusterInfo.toString().replaceAll("[\\[\\]\\{\\}]", ""), kmeans);
+					cluster.parseCluster(clusterInfo.toString(), kmeans);
 					if (!cluster.isEmpty()) {
 						clusters[cluster.getIndex()] = cluster;
 					}
@@ -452,7 +444,7 @@ public class KMeans extends Configured implements Tool {
 					// Close this file
 					reader.close();
 					done = true;
-				} catch (EOFException e) { // In case of failure, retry to read the file for a max. of 5 times
+				} catch (Exception e) { // In case of failure, retry to read the file for a max. of 5 times
 					System.out.printf("Unsuccesfully read a file (%s) | will retry...\n", e);
 					done = false;
 					retry++;
@@ -468,6 +460,19 @@ public class KMeans extends Configured implements Tool {
 		return clusters;
 	}
 	
+	/**
+	 * Run an iteration of the extra map task to
+	 *  calculate the outliers of every cluster found in the previous phase.
+	 * @param conf: Configuration object used for every Map/Reduce job initiated 
+	 * @param baseInputString: the input path as a String
+	 * @param kmeans: the number of clusters to create as an Integer
+	 * @param iteration: the number of iterations to run the algorithm as an Integer
+	 * @return: a Cluster array object, containing all the new clusters
+	 * @throws IOException for creating and starting a job, setting the input path
+	 * 				and checking convergence
+	 * @throws InterruptedException for starting a job.
+	 * @throws ClassNotFoundException for starting a job.
+	 */
 	private Cluster[] phase2(Configuration conf, String baseInputString, int kmeans, int iteration) throws IOException, InterruptedException, ClassNotFoundException {
 		String inputString = baseInputString + "/iter" + (iteration + 1);
 		conf.set("outlierlessMeans", inputString + "means/phase1"); // the path where to store the cluster means found
@@ -492,18 +497,16 @@ public class KMeans extends Configured implements Tool {
 	}
 	
 	/**
-	 * Run an iteration of the k-means clustering algorithm as a
-	 *  Map/Reduce job
+	 * Run an iteration of the basic k-means clustering algorithm 
+	 *  of assigning points and recalculating the cluster centroid.
 	 * @param conf: Configuration object used for every Map/Reduce job initiated 
 	 * @param inputString: the input path as a String
-	 * @param outputString: the output path as a String
+	 * @param baseOutputString: the output path as a String
 	 * @param kmeans: the number of clusters to create as an Integer
-	 * @param iterations: the number of iterations to run the algorithm as an Integer
-	 * @return: a Point array, containing all the new centroids found
-	 * @throws IOException for creating and starting a job, setting the input path
-	 * 				and checking convergence
-	 * @throws InterruptedException for starting a job
-	 * @throws ClassNotFoundException for starting a job
+	 * @param iteration: the number of iterations to run the algorithm as an Integer
+	 * @throws IOException for creating and starting a job, setting the input path.
+	 * @throws InterruptedException for starting a job.
+	 * @throws ClassNotFoundException for starting a job.
 	 */
 	public void phase1(Configuration conf, String inputString, String baseOutputString, int kmeans, int iteration) throws IOException, InterruptedException, ClassNotFoundException {
 		String outputString = baseOutputString + "/iter" + (iteration + 1);
@@ -529,9 +532,10 @@ public class KMeans extends Configured implements Tool {
 	}
 	
 	/**
-	 * Iterate the main map/reduce job of:
-	 *  1. Calculating distances between cluster centroids and the points
-	 *  2. Recalculating the new cluster centroids
+	 * Iterate the two phased job of:
+	 *  1.Map: Calculating distances between cluster centroids and the points
+	 *  1.Reduce: Recalculating the new cluster centroids
+	 *  2.Map: Calculate the new outliers of this cluster
 	 * If it is the first iteration, start by setting a flag in the 
 	 * 	Configuration object 
 	 * After a round was finished, check if the centroids converged (e.g. they equal the previous round)
@@ -544,7 +548,7 @@ public class KMeans extends Configured implements Tool {
 	 */
 	private void iterate(Configuration conf, String inputString, String baseOutputString, int kmeans, int iterations) throws Exception {
 		boolean converged = false;
-		Cluster[] previousClusters = new Cluster[0], currentClusters = new Cluster[kmeans];
+		Cluster[] oldClusters = new Cluster[0], newClusters = new Cluster[kmeans];
 		
 		System.out.printf("Matrix Input Path: %s Base Output Path: %s Iterations: %d\n", inputString, baseOutputString, iterations);
 		for (int i = 0; i < iterations; i++) {
@@ -560,28 +564,25 @@ public class KMeans extends Configured implements Tool {
 			System.out.printf("Phase 1, Iteration %d will start\n\n;", i + 1);
 			phase1(conf, inputString, baseOutputString, kmeans, i); // Main k-means algorithm
 			System.out.printf("\n\nPhase 1, Iteration %d complete | Phase 2, Iteration %d will start\n\n", i + 1, i + 1);
-			currentClusters = phase2(conf, baseOutputString, kmeans, i); // Find the outliers for possible empty clusters
+			newClusters = phase2(conf, baseOutputString, kmeans, i); // Find the outliers for possible empty clusters
 			System.out.printf("\n\nPhase 2, Iteration %d complete\n", i + 1);
 			
 			// Check for convergence of the algorithm
-			if (checkConvergence(previousClusters, currentClusters)) {
+			if (checkConvergence(oldClusters, newClusters)) {
 				System.out.printf("Clusters Converged in Iteration %d\n\n", i + 1);
-				for (int k = 0; k < currentClusters.length; k++) {
-					System.out.printf("Cluster %d:\t%s\n", k, currentClusters[k].toString());
-				}
 				converged = true; // set to unset the final 'we-did-not-converge' print 
 				break;
 			}
 			else {
-				previousClusters = currentClusters;
+				oldClusters = newClusters;
 			}
 		}
 		
 		if (!converged) {
 			System.out.printf("Clusters did not converge, but reached the maximum number of iterations\n\n");
-			for (int k = 0; k < currentClusters.length; k++) {
-				System.out.printf("Cluster %d:\t%s\n", k, currentClusters[k].toString());
-			}
+		}
+		for (int k = 0; k < newClusters.length; k++) {
+			System.out.printf("Cluster %d:\t%s\n", k, newClusters[k].toString());
 		}
 	}
 	

@@ -10,10 +10,9 @@ public class FloatAbsDiffAggregator extends AbstractAggregator<FloatWritable, Ve
 	
 	@Override
 	public void aggregate(Vertex<?, ?, FloatWritable> v, FloatWritable oldValue, FloatWritable newValue) {
-		// make sure it's nullsafe
+		// make sure it's null safe
 		if (oldValue != null) {
 			absoluteDifferenceTwo += Math.abs(oldValue.get() - newValue.get());
-			System.out.printf("AGGREGATEOLDNEW\tabsoluteDifference %f absoluteDifferenceTwo %f\n", absoluteDifference, absoluteDifferenceTwo);
 		}
 	}
 	
@@ -22,12 +21,10 @@ public class FloatAbsDiffAggregator extends AbstractAggregator<FloatWritable, Ve
 	@Override
 	public void aggregate(Vertex<?, ?, FloatWritable> vertex, FloatWritable value) {
 		absoluteDifference += value.get();
-		System.out.printf("AGGREGATE\tabsoluteDifference %f absoluteDifferenceTwo %f\n", absoluteDifference, absoluteDifferenceTwo);
 	}
 
 	@Override
 	public FloatWritable getValue() {
-		System.out.printf("GET\tabsoluteDifference %f absoluteDifferenceTwo %f\n", absoluteDifference, absoluteDifferenceTwo);
 		return new FloatWritable(absoluteDifference);
 	}
 }

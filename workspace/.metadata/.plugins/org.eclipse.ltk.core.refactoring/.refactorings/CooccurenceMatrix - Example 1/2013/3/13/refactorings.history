@@ -1,4 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<session version="1.0">
-<refactoring comment="Copy element &apos;TextPair.java&apos; to &apos;CooccurenceMatrix - Example 3/src/(default package)&apos;&#x0A;- Original project: &apos;CooccurenceMatrix - Example 1&apos;&#x0A;- Destination element: &apos;CooccurenceMatrix - Example 3/src/(default package)&apos;&#x0A;- Original element: &apos;TextPair.java&apos;" description="Copy compilation unit" destination="=CooccurenceMatrix - Example 3/src&lt;" element1="/src&lt;{TextPair.java" files="0" flags="589830" folders="0" id="org.eclipse.jdt.ui.copy" policy="org.eclipse.jdt.ui.copyResources" stamp="1364304318464" units="1" version="1.0"/>
-</session>

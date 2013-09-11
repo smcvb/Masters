@@ -18,6 +18,7 @@ import org.apache.hadoop.mapreduce.Mapper;
 import org.apache.hadoop.mapreduce.Partitioner;
 import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
+import org.apache.hadoop.mapreduce.lib.input.SequenceFileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.TextOutputFormat;
 import org.apache.hadoop.util.Tool;
@@ -33,7 +34,7 @@ import cloud9.WikipediaPageInputFormat;
  * Hadoop program to run the Inverted Indexing algorithm as
  *  specified in 'Data-Intensive Text Processing with MapReduce'
  * @author stevenb
- * @date 18-07-2013
+ * @date 05-09-2013
  */
 public class InvertedIndex extends Configured implements Tool {
 	
@@ -57,7 +58,7 @@ public class InvertedIndex extends Configured implements Tool {
 			"you", "you'd", "you'll", "you're", "you've", "your", "yours", "yourself", "yourselves"
 	}; // A list of stop words which are not important to map
 	
-	public static class Map extends Mapper<LongWritable, WikipediaPage, TextLongPair, IntWritable> {
+	public static class Map extends Mapper<TextLongPair, IntWritable, TextLongPair, IntWritable> {
 		
 		private long currentDocid, previousDocid;
 		private HashMap<String, Integer> postingTupleMap;
@@ -75,12 +76,9 @@ public class InvertedIndex extends Configured implements Tool {
 		}
 		
 		@Override
-		public void map(LongWritable key, WikipediaPage value, Context context) throws IOException, InterruptedException {
-			if (value.isEmpty()) { // An empty WikipediaPage was encountered, hence nothing to retrieve terms from
-				return;
-			}
-			String term = "", contents = value.getContent(); // List containing terms to count frequency over
-			currentDocid = Long.parseLong(value.getDocid());
+		public void map(TextLongPair key, IntWritable value, Context context) throws IOException, InterruptedException {
+			String term = "", contents = key.getTerm().toString(); // List containing terms to count frequency over
+			currentDocid = key.getDocid().get();
 			String[] terms = contents.split("\\s+");
 			for (int i = 0; i < terms.length; i++) { // Pay load part of the inverted indexing algorithm | term frequency in this case
 				term = terms[i].toLowerCase().replaceAll("[^A-Za-z0-9]", "");
@@ -235,16 +233,13 @@ public class InvertedIndex extends Configured implements Tool {
 	 * @throws IOException for creating the job and setting the input path
 	 */
 	private Job createJob(Configuration conf, String inputPath, String outputPath, int reduceTasks) throws IOException {
-		conf.set("io.sort.mb", "512"); // Configuration settings
-		conf.set("mapred.child.java.opts", "-Xmx4096m");
-		conf.set("mapred.task.timeout", "0");
 		conf.set("wiki.language", "en");
 		
 		Job job = new Job(conf, "Inverted Indexing"); // Main settings
 		job.setJarByClass(InvertedIndex.class);
 		job.setNumReduceTasks(reduceTasks);
 		FileInputFormat.setInputPaths(job, new Path(inputPath)); // Input settings
-		job.setInputFormatClass(WikipediaPageInputFormat.class);
+		job.setInputFormatClass(SequenceFileInputFormat.class);
 		FileOutputFormat.setOutputPath(job, new Path(outputPath)); // Output settings
 		job.setOutputFormatClass(TextOutputFormat.class);
 		job.setOutputKeyClass(TextLongPair.class);

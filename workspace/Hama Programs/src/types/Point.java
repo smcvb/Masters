@@ -13,7 +13,7 @@ import org.apache.hadoop.io.WritableComparable;
  * An N dimensional object to store a point
  *  from an input matrix for k-means clustering
  * @author stevenb
- * @date 01-08-2013
+ * @date 02-09-2013
  */
 public class Point implements WritableComparable<Point> {
 	
@@ -176,6 +176,11 @@ public class Point implements WritableComparable<Point> {
 		return Math.sqrt(distSum);
 	}
 	
+	/**
+	 * Check whether this is a zero
+	 *  dimensions Point.
+	 * @return: true if is empty and false if is filled
+	 */
 	public boolean isEmpty() {
 		return coordinates.length <= 0;
 	}
@@ -250,6 +255,15 @@ public class Point implements WritableComparable<Point> {
 		return 0;
 	}
 	
+	/**
+	 * Compare a point to this point with a 
+	 *  certain convergence value
+	 * @param point: a Point object to compare this to
+	 * @param convergencePoint: a float variable denoting the
+	 * 	convergence point
+	 * @return -0 if this is below point, 0 if this is equal to point
+	 *  and +0 if this is above point.
+	 */
 	public double compareTo(Point point, float convergencePoint) {
 		double[] otherCoordinates = point.getCoordinates();
 		for (int i = 0; i < coordinates.length; i++) {

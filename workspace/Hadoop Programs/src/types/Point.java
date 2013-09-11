@@ -13,7 +13,7 @@ import org.apache.hadoop.io.WritableComparable;
  * An N dimensional object to store a point
  *  from an input matrix for k-means clustering
  * @author stevenb
- * @date 01-08-2013
+ * @date 02-09-2013
  */
 public class Point implements WritableComparable<Point> {
 	
@@ -21,13 +21,13 @@ public class Point implements WritableComparable<Point> {
 	private String[] nonNumericalValues; // Will contain non-numerical information of this point of concern in the data set, like data point names or racial information etc. 
 	
 	public Point(double[] coordinates, String[] nonNumericalValues) {
-		this.coordinates = coordinates;
-		this.nonNumericalValues = nonNumericalValues;
+		this.coordinates = Arrays.copyOf(coordinates, coordinates.length);
+		this.nonNumericalValues = Arrays.copyOf(nonNumericalValues, nonNumericalValues.length);
 	}
 	
 	public Point(Point p) {
-		coordinates = p.getCoordinates();
-		nonNumericalValues = p.getNonNumericalValues();
+		coordinates = Arrays.copyOf(p.getCoordinates(), p.getCoordinates().length);
+		nonNumericalValues = Arrays.copyOf(p.getNonNumericalValues(), p.getNonNumericalValues().length);
 	}
 	
 	public Point(String coordinatesString) {
@@ -141,7 +141,6 @@ public class Point implements WritableComparable<Point> {
 	public void add(Point p) {
 		double[] otherCoordinates = p.getCoordinates();
 		for (int i = 0; i < coordinates.length; i++) {
-//			System.out.printf("Index:%d // coordinates:%f + otherCoordinates:%f\n", i, coordinates[i], otherCoordinates[i]); // TODO REMOVE
 			coordinates[i] += otherCoordinates[i];
 		}
 	}
@@ -169,14 +168,21 @@ public class Point implements WritableComparable<Point> {
 		
 		double dist = 0.0, distSum = 0.0;
 		double pointCoordinates[] = p.getCoordinates();
-//		System.out.printf("POINT: Calculate distance between:\n\t[%s] Coordinate length %d\n\t[%s] Coordinate length %d\n\n", toString(), coordinates.length, p.toString(), pointCoordinates.length); // TODO REMOVE
 		for (int i = 0; i < pointCoordinates.length; i++) {
-//			System.out.printf("POINT: Index: %d this: %f that: %f\n", i, coordinates[i], pointCoordinates[i]); // TODO REMOVE
 			dist = pointCoordinates[i] - coordinates[i];
 			distSum += Math.pow(dist, 2);
 		}
 		
 		return Math.sqrt(distSum);
+	}
+	
+	/**
+	 * Check whether this is a zero
+	 *  dimensions Point.
+	 * @return: true if is empty and false if is filled
+	 */
+	public boolean isEmpty() {
+		return coordinates.length <= 0;
 	}
 	
 	@Override
@@ -249,6 +255,15 @@ public class Point implements WritableComparable<Point> {
 		return 0;
 	}
 	
+	/**
+	 * Compare a point to this point with a 
+	 *  certain convergence value
+	 * @param point: a Point object to compare this to
+	 * @param convergencePoint: a float variable denoting the
+	 * 	convergence point
+	 * @return -0 if this is below point, 0 if this is equal to point
+	 *  and +0 if this is above point.
+	 */
 	public double compareTo(Point point, float convergencePoint) {
 		double[] otherCoordinates = point.getCoordinates();
 		for (int i = 0; i < coordinates.length; i++) {

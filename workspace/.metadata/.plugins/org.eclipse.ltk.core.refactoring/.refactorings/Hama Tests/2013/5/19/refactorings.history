@@ -1,4 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<session version="1.0">
-<refactoring comment="Copy 2 elements to &apos;Hama Programs/src/aggregators&apos;&#x0A;- Original project: &apos;Hama Tests&apos;&#x0A;- Destination element: &apos;Hama Programs/src/aggregators&apos;&#x0A;- Original elements:&#x0A;     FloatAverageAggregator.java&#x0A;     FloatAbsDiffAggregator.java" description="Copy compilation units" destination="=Hama Programs/src&lt;aggregators" element1="/src&lt;{FloatAverageAggregator.java" element2="/src&lt;{FloatAbsDiffAggregator.java" files="0" flags="589830" folders="0" id="org.eclipse.jdt.ui.copy" policy="org.eclipse.jdt.ui.copyResources" stamp="1368023554267" units="2" version="1.0"/>
-</session>

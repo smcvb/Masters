@@ -24,7 +24,7 @@ import org.apache.hama.graph.VertexInputReader;
  * Hadoop program to run the Pagerank algorithm as
  *  specified in 'Data-Intensive Text Processing with MapReduce'
  * @author stevenb
- * @date 15-07-2013
+ * @date 02-09-2013
  */
 public class Pagerank extends Configured implements Tool {
 	
@@ -47,8 +47,6 @@ public class Pagerank extends Configured implements Tool {
 			double pagerankMass = 0;
 			if (numEdges > 0) {
 				pagerankMass = getValue().get() / numEdges;
-//				System.out.printf("getValue().get(): %f / numEdges: %d = pagerankMass: %f\n SuperStep: %d\n",
-//						getValue().get(), numEdges, pagerankMass, getSuperstepCount()); // TODO remove
 			}
 			
 			if (getSuperstepCount() >= 1) {
@@ -58,44 +56,28 @@ public class Pagerank extends Configured implements Tool {
 				DoubleWritable sendPagerankMass = getLastAggregatedValue(0); // Aggregator 0 sums up all values send | hence representative to find the total mass lost
 				if (sendPagerankMass != null) {
 					double lostPagerankMass = getNumVertices() - sendPagerankMass.get();
-//					System.out.printf("lostPagerankMass: %f = numNodes: %d - sendPagerankMass: %f\n",  // TODO remove
-//							lostPagerankMass, getNumVertices(), sendPagerankMass.get()); // TODO remove
 					lostPagerankMassPart = lostPagerankMass / getNumVertices();
-//					System.out.printf("lostPagerankMassPart: %f = lostPagerankMass: %f / numNodes: %d\n", // TODO remove 
-//							lostPagerankMassPart, lostPagerankMass, getNumVertices()); // TODO remove
 				}
 				
 				// Sum the Pagerank mass received
 				for (DoubleWritable message : messages) {
-//					System.out.printf("GOT A MESSAGE!-GOT A MESSAGE!-GOT A MESSAGE!\n");
 					pagerank += message.get();
 				}
 				
 				// Finish the Pagerank calculation
 				jump = ALPHA / getNumVertices();
 				link = (1 - ALPHA) * (pagerank + lostPagerankMassPart);
-//				System.out.printf("ALPHA: %f / numNodes: %d = jump: %f\n" +// TODO remove
-//						"(1 - ALPHA: %f) * (pagerank: %f + lostPagerankMassPart: %f) = link: %f\n",// TODO remove 
-//						ALPHA, getNumVertices(), jump,// TODO remove
-//						(1 - ALPHA), pagerank, lostPagerankMassPart, link);// TODO remove				
 				pagerank = jump + link;
-//				System.out.printf("jump: %f + link: %f = pagerank: %f\n SuperStep: %d\n\n",// TODO remove 
-//						jump, link, pagerank, getSuperstepCount());// TODO remove
 				setValue(new DoubleWritable(pagerank));
 			}
 			
 			// Check whether finished and send Pagerank Mass if not
 			DoubleWritable lastAverage = getLastAggregatedValue(1); // Aggregator 1 averages all values send compared to the previous round | hence able to estimate convergence
-//			if (lastAverage != null) { // TODO remove
-//				System.out.println("AVG Superstep: " + getSuperstepCount() + " | lastAverage: " + lastAverage.get()); // TODO remove
-//			} // TODO remove
 			if (getSuperstepCount() > getMaxIteration()) {
-				System.out.printf("More supersteps than iterations\n Superstep: %d Iterations: %d\n", getSuperstepCount(), getMaxIteration()); // TODO remove
 				voteToHalt(); // Ran maximal number of iterations specified, hence halt
 				return;
 			}
 			else if (lastAverage != null && getSuperstepCount() > 2 && lastAverage.get() < CONVERGENCE_POINT) {
-				System.out.printf("Convergence point reached! Last Average: %f Convergence Point: %f Supersteps: %d\n", lastAverage.get(), CONVERGENCE_POINT, getSuperstepCount()); // TODO remove
 				voteToHalt(); // Reached convergence, hence halt
 				return;
 			}
@@ -104,6 +86,7 @@ public class Pagerank extends Configured implements Tool {
 	}
 	
 	public static class PageRankTextReader extends VertexInputReader<LongWritable, Text, LongWritable, NullWritable, DoubleWritable> {
+		
 		@Override
 		public boolean parseVertex(LongWritable key, Text value, Vertex<LongWritable, NullWritable, DoubleWritable> vertex) throws Exception {
 			String[] vertices = value.toString().split("\n");
