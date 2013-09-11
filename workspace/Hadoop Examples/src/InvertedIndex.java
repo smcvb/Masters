@@ -64,6 +64,7 @@ public class InvertedIndex {
 				System.out.printf("%s %s\n", tuple.toString(), frequency.toString());
 				context.write(tuple, frequency);
 			}
+			tupleMap.clear(); //clear memory
 		}
 	}
 	
