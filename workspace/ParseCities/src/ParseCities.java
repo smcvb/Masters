@@ -36,7 +36,24 @@ public class ParseCities {
 			}
 			
 			if (terms[terms.length - 1].equals(previousCountry)) {
-				cities.add(line);
+				if(terms.length > 4){
+					StringBuilder b = new StringBuilder();
+					b.append(terms[0]);
+					b.append(" ");
+					b.append(terms[1]);
+					b.append(" ");
+					for(int i = 2; i < terms.length - 2; i++){
+						b.append(terms[i]);
+						b.append("_");
+					}
+					b.append(terms[terms.length - 2]);
+					b.append(" ");
+					b.append(terms[terms.length - 1]);
+					
+					cities.add(b.toString());
+				} else {
+					cities.add(line);
+				}
 			} else {
 				System.out.printf("Going to write country(%s) number %d to a new file called %s\n", previousCountry, countries, String.format("%s%s", output, previousCountry));
 				
@@ -52,6 +69,24 @@ public class ParseCities {
 				//Keeping track
 				cities.clear();
 				previousCountry = terms[terms.length - 1];
+				if(terms.length > 4){
+					StringBuilder b = new StringBuilder();
+					b.append(terms[0]);
+					b.append(" ");
+					b.append(terms[1]);
+					b.append(" ");
+					for(int i = 2; i < terms.length - 3; i++){
+						b.append(terms[i]);
+						b.append("_");
+					}
+					b.append(terms[terms.length - 2]);
+					b.append(" ");
+					b.append(terms[terms.length - 1]);
+					
+					cities.add(b.toString());
+				} else {
+					cities.add(line);
+				}
 				countries++;
 			}
 		}
