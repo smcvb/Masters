@@ -367,6 +367,7 @@ public class Pagerank extends Configured implements Tool {
 		oldMass = 0.0; // Stores the previously found mass send around to check convergence
 		
 		System.out.printf("Startpath: %s Basepath: %s Iterations: %d\n", startPath, basePath, iterations);
+		long startTime = System.currentTimeMillis();
 		for (int i = 0; i < iterations; i++) {
 			if (oldMass != 0) {
 				System.out.printf("Previous send mass: %f and current send mass: %f\n", oldMass, mass);
@@ -388,6 +389,7 @@ public class Pagerank extends Configured implements Tool {
 			phase2(conf, basePath, i);
 			System.out.printf("\n\nPhase 2, Iteration %d complete\n", i + 1);
 		}
+		System.out.println("\n\nJob finished in " + (System.currentTimeMillis() - startTime) / 1000.0 + " seconds");
 	}
 	
 	/**

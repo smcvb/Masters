@@ -551,6 +551,7 @@ public class KMeans extends Configured implements Tool {
 		Cluster[] oldClusters = new Cluster[0], newClusters = new Cluster[kmeans];
 		
 		System.out.printf("Matrix Input Path: %s Base Output Path: %s Iterations: %d\n", inputString, baseOutputString, iterations);
+		long startTime = System.currentTimeMillis();
 		for (int i = 0; i < iterations; i++) {
 			// Check whether first iteration; of concern for initialization process
 			if (i == 0) {
@@ -578,12 +579,14 @@ public class KMeans extends Configured implements Tool {
 			}
 		}
 		
+		
 		if (!converged) {
 			System.out.printf("Clusters did not converge, but reached the maximum number of iterations\n\n");
 		}
 		for (int k = 0; k < newClusters.length; k++) {
-			System.out.printf("Cluster %d:\t%s\n", k, newClusters[k].toString());
+			System.out.printf("Cluster %d:\t%s\n\n", k, newClusters[k].toString());
 		}
+		System.out.println("\n\nJob finished in " + (System.currentTimeMillis() - startTime) / 1000.0 + " seconds");
 	}
 	
 	/**
