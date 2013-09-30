@@ -584,7 +584,11 @@ public class KMeans extends Configured implements Tool {
 			System.out.printf("Clusters did not converge, but reached the maximum number of iterations\n\n");
 		}
 		for (int k = 0; k < newClusters.length; k++) {
-			System.out.printf("Cluster %d:\t%s\n\n", k, newClusters[k].toString());
+			if(newClusters[k] != null){
+				System.out.printf("Cluster %d:\t%s\n\n", k, newClusters[k].toString());
+			} else {
+				System.out.printf("Cluster %d is empty\n\n", k);
+			}
 		}
 		System.out.println("\n\nJob finished in " + (System.currentTimeMillis() - startTime) / 1000.0 + " seconds");
 	}
