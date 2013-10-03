@@ -258,7 +258,7 @@ public class InvertedIndex extends Configured implements Tool {
 	 *  gave incorrect input
 	 */
 	private int printUsage() {
-		System.out.println("usage:\t <input path> <output path> <number of reduce tasks [default = 27]>");
+		System.out.println("usage:\t <input path> <output path> <number of reduce tasks [default = 37]>");
 		ToolRunner.printGenericCommandUsage(System.out);
 		return -1;
 	}
