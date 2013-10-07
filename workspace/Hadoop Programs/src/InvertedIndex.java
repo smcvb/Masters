@@ -27,14 +27,12 @@ import org.apache.hadoop.util.ToolRunner;
 import types.TextIntPair;
 import types.TextIntPairArrayWritable;
 import types.TextLongPair;
-import cloud9.WikipediaPage;
-import cloud9.WikipediaPageInputFormat;
 
 /**
  * Hadoop program to run the Inverted Indexing algorithm as
  *  specified in 'Data-Intensive Text Processing with MapReduce'
  * @author stevenb
- * @date 05-09-2013
+ * @date 07-10-2013
  */
 public class InvertedIndex extends Configured implements Tool {
 	
@@ -233,8 +231,6 @@ public class InvertedIndex extends Configured implements Tool {
 	 * @throws IOException for creating the job and setting the input path
 	 */
 	private Job createJob(Configuration conf, String inputPath, String outputPath, int reduceTasks) throws IOException {
-		conf.set("wiki.language", "en");
-		
 		Job job = new Job(conf, "Inverted Indexing"); // Main settings
 		job.setJarByClass(InvertedIndex.class);
 		job.setNumReduceTasks(reduceTasks);

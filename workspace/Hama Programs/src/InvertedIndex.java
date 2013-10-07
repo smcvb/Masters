@@ -35,7 +35,7 @@ import cloud9.language.WikipediaPageFactory;
  */
 public class InvertedIndex extends Configured implements Tool {
 	
-	public static final int BSP_TASKS = 27;
+	public static final int BSP_TASKS = 37; // 26 letters + 10 digits + 1 signs
 	public static final String[] STOPWORDS = {"a", "about", "above", "after", "again", "against", "all", "am", "an", "and", "any", "are", "aren't", "as", "at",
 			"be", "because", "been", "before", "being", "below", "between", "both", "but", "by",
 			"can't", "cannot", "could", "couldn't", "did", "didn't", "do", "does", "doesn't", "doing", "don't", "down", "during",
