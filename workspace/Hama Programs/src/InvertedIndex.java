@@ -16,22 +16,21 @@ import org.apache.hama.HamaConfiguration;
 import org.apache.hama.bsp.BSP;
 import org.apache.hama.bsp.BSPJob;
 import org.apache.hama.bsp.BSPPeer;
+import org.apache.hama.bsp.SequenceFileInputFormat;
 import org.apache.hama.bsp.TextOutputFormat;
 import org.apache.hama.bsp.message.MessageManager;
 import org.apache.hama.bsp.sync.SyncException;
 
 import types.TextIntPair;
 import types.TextIntPairArrayWritable;
-import types.TextTextIntWritableTuple;
-import cloud9.WikipediaPage;
-import cloud9.WikipediaPageInputFormat;
-import cloud9.language.WikipediaPageFactory;
+import types.TextLongPair;
+import types.TextLongIntMessage;
 
 /**
  * Hama program to run the Inverted Indexing algorithm as
  *  specified in 'Data-Intensive Text Processing with MapReduce'
  * @author stevenb
- * @date 15-07-2013
+ * @date 15-10-2013
  */
 public class InvertedIndex extends Configured implements Tool {
 	
@@ -55,7 +54,7 @@ public class InvertedIndex extends Configured implements Tool {
 			"you", "you'd", "you'll", "you're", "you've", "your", "yours", "yourself", "yourselves"
 	}; // A list of stop words which are not important to map
 	
-	public static class InvertedIndexBSP extends BSP<LongWritable, WikipediaPage, Text, TextIntPairArrayWritable, TextTextIntWritableTuple> {
+	public static class InvertedIndexBSP extends BSP<TextLongPair, IntWritable, Text, TextIntPairArrayWritable, TextLongIntMessage> {
 		
 		private String currentTerm, previousTerm;
 		private HashMap<String, Integer> postingTupleMap;
@@ -64,7 +63,7 @@ public class InvertedIndex extends Configured implements Tool {
 		private TextIntPairArrayWritable writablePostings;
 		
 		@Override
-		public void setup(BSPPeer<LongWritable, WikipediaPage, Text, TextIntPairArrayWritable, TextTextIntWritableTuple> peer) throws IOException { //initialize
+		public void setup(BSPPeer<TextLongPair, IntWritable, Text, TextIntPairArrayWritable, TextLongIntMessage> peer) throws IOException { //initialize
 			currentTerm = "[empty]";
 			previousTerm = null;
 			postingTupleMap = new HashMap<String, Integer>();
@@ -85,7 +84,7 @@ public class InvertedIndex extends Configured implements Tool {
 		 * @throws SyncException for the synchronize step 
 		 */
 		@Override
-		public void bsp(BSPPeer<LongWritable, WikipediaPage, Text, TextIntPairArrayWritable, TextTextIntWritableTuple> peer) throws IOException, InterruptedException, SyncException {
+		public void bsp(BSPPeer<TextLongPair, IntWritable, Text, TextIntPairArrayWritable, TextLongIntMessage> peer) throws IOException, InterruptedException, SyncException {
 			createTermFrequencies(peer);
 			peer.sync();
 			createPostingsList(peer);
@@ -98,17 +97,14 @@ public class InvertedIndex extends Configured implements Tool {
 		 * @throws IOException for the reading the read values 
 		 * 		and sending messages to other peers
 		 */
-		private void createTermFrequencies(BSPPeer<LongWritable, WikipediaPage, Text, TextIntPairArrayWritable, TextTextIntWritableTuple> peer) throws IOException {
-			LongWritable key = new LongWritable();
-			WikipediaPage page = WikipediaPageFactory.createWikipediaPage("en");
+		private void createTermFrequencies(BSPPeer<TextLongPair, IntWritable, Text, TextIntPairArrayWritable, TextLongIntMessage> peer) throws IOException {
+			TextLongPair key = new TextLongPair();
+			IntWritable value = new IntWritable();
 			
-			while (peer.readNext(key, page)) { // Collect frequencies and send postings | One message is One WikipediaPage is One send
-				if (page.isEmpty()) { // An empty WikipediaPage was encountered, hence nothing to retrieve terms from
-					break;
-				}
-				
-				String term = "", article = page.getTitle(), line = page.getContent();
-				String[] terms = line.split("\\s+");
+			while (peer.readNext(key, value)) { // Collect frequencies and send postings | One message is One WikipediaPage is One send
+				String term = "", contents = key.getTerm().toString();
+				long docid = key.getDocid().get();
+				String[] terms = contents.split("\\s+");
 				for (int i = 0; i < terms.length; i++) { // Pay load part | term frequency in this case
 					term = terms[i].toLowerCase().replaceAll("[^A-Za-z0-9]", "");
 					if (!term.equals("") && !stopwordSet.contains(term)) {
@@ -117,7 +113,7 @@ public class InvertedIndex extends Configured implements Tool {
 				}
 				
 				for (Entry<String, Integer> entry : postingTupleMap.entrySet()) {
-					TextTextIntWritableTuple tuple = new TextTextIntWritableTuple(entry.getKey(), article, entry.getValue());
+					TextLongIntMessage tuple = new TextLongIntMessage(entry.getKey(), docid, entry.getValue());
 					String other = peer.getPeerName(Math.abs(tuple.getTerm().hashCode()) % peer.getNumPeers());
 					peer.send(other, tuple);
 				}
@@ -132,10 +128,11 @@ public class InvertedIndex extends Configured implements Tool {
 		 * @throws IOException for the reading of the received messages 
 		 * 		and for writing the output
 		 */
-		private void createPostingsList(BSPPeer<LongWritable, WikipediaPage, Text, TextIntPairArrayWritable, TextTextIntWritableTuple> peer) throws IOException {
+		private void createPostingsList(BSPPeer<TextLongPair, IntWritable, Text, TextIntPairArrayWritable, TextLongIntMessage> peer) throws IOException {
 			int totalMessages = peer.getNumCurrentMessages();
 			for (int i = 0; i < totalMessages; i++) {
-				TextTextIntWritableTuple tuple = peer.getCurrentMessage();
+				TextLongIntMessage tuple = peer.getCurrentMessage();
+				
 				currentTerm = tuple.getTerm().toString();
 				if (!currentTerm.equals(previousTerm) && previousTerm != null) { // New term start, write out old term
 					TextIntPair[] postingsArray = new TextIntPair[postingsList.size()];
@@ -151,7 +148,7 @@ public class InvertedIndex extends Configured implements Tool {
 		}
 		
 		@Override
-		public void cleanup(BSPPeer<LongWritable, WikipediaPage, Text, TextIntPairArrayWritable, TextTextIntWritableTuple> peer) throws IOException { // Close
+		public void cleanup(BSPPeer<TextLongPair, IntWritable, Text, TextIntPairArrayWritable, TextLongIntMessage> peer) throws IOException { // Close
 			TextIntPair[] postingsArray = new TextIntPair[postingsList.size()];
 			postingsArray = postingsList.toArray(postingsArray);
 			writablePostings.set(postingsArray);
@@ -176,13 +173,13 @@ public class InvertedIndex extends Configured implements Tool {
 		job.setBspClass(InvertedIndexBSP.class);
 		job.setNumBspTask(tasks);
 		job.setInputPath(new Path(inputPath)); // Input settings
-		job.setInputFormat(WikipediaPageInputFormat.class);
-		job.setInputKeyClass(LongWritable.class);
-		job.setInputValueClass(Text.class);
+		job.setInputFormat(SequenceFileInputFormat.class);
+		job.setInputKeyClass(TextLongPair.class);
+		job.setInputValueClass(IntWritable.class);
 		job.setOutputPath(new Path(outputPath)); // Output settings
 		job.setOutputFormat(TextOutputFormat.class);
 		job.setOutputKeyClass(Text.class);
-		job.setOutputValueClass(IntWritable.class);
+		job.setOutputValueClass(TextIntPairArrayWritable.class);
 		
 		return job;
 	}
