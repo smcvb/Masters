@@ -8,6 +8,7 @@ import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.mapreduce.Job;
 import org.apache.hadoop.mapreduce.Mapper;
+import org.apache.hadoop.mapreduce.Reducer;
 import org.apache.hadoop.mapreduce.lib.input.FileInputFormat;
 import org.apache.hadoop.mapreduce.lib.output.FileOutputFormat;
 import org.apache.hadoop.mapreduce.lib.output.SequenceFileOutputFormat;
@@ -24,7 +25,7 @@ import cloud9.WikipediaPageInputFormat;
  *  dumb file as loss <text-docid, null>
  *  sequence files.
  * @author stevenb
- * @date 05-09-2013
+ * @date 17-10-2013
  */
 public class SeparatePages extends Configured implements Tool {
 	
@@ -50,7 +51,13 @@ public class SeparatePages extends Configured implements Tool {
 		}
 	}
 	
-	public void createJob(Configuration conf, String inputString, String outputString) throws IOException, InterruptedException, ClassNotFoundException {
+	public static class Reduce extends Reducer<TextLongPair, IntWritable, TextLongPair, IntWritable> {
+		public void reduce(TextLongPair key, Iterable<IntWritable> values, Context context) throws IOException, InterruptedException {
+			context.write(key, new IntWritable(0));
+		}
+	}
+	
+	public Job createJob(Configuration conf, String inputString, String outputString, int reduceTasks) throws IOException, InterruptedException, ClassNotFoundException {
 		conf.set("wiki.language", "en");
 		Job job = new Job(conf, "Separate Wikipedia Pages"); // Main settings
 		job.setJarByClass(SeparatePages.class);
@@ -61,24 +68,25 @@ public class SeparatePages extends Configured implements Tool {
 		job.setOutputKeyClass(TextLongPair.class);
 		job.setOutputValueClass(IntWritable.class);
 		job.setMapperClass(Map.class); // Class settings
-		job.setNumReduceTasks(0);
-		
-		long startTime = System.currentTimeMillis();
-		if (job.waitForCompletion(true)) {
-			System.out.println("Finished in " + (System.currentTimeMillis() - startTime) / 1000.0 + " seconds");
+		job.setNumReduceTasks(reduceTasks);
+		if(reduceTasks > 0){
+			job.setReducerClass(Reduce.class);
 		}
+		
+		return job;
 	}
 	
 	private int printUsage() {
-		System.out.println("usage:\t <input path> <output path>");
+		System.out.println("usage:\t <input path> <output path> [reducers]");
 		ToolRunner.printGenericCommandUsage(System.out);
 		return -1;
 	}
 	
 	@Override
 	public int run(String[] args) throws Exception {
+		int reduceTasks = 0; //If no [reducers] parameter is given, the number of output partitions will equal the number of input partitions.
 		String inputString = "", outputString = "";
-		Configuration conf = new Configuration(getConf());
+		Configuration conf = new Configuration();
 		
 		// Set arguments
 		if (args.length < 2) {
@@ -87,9 +95,21 @@ public class SeparatePages extends Configured implements Tool {
 		}
 		inputString = args[0];
 		outputString = args[1];
+		if(args.length >= 3){
+			try {
+				reduceTasks = Integer.parseInt(args[2]);
+			} catch (NumberFormatException e) {
+				System.err.println("Error: expected Integer instead of " + args[2]);
+				return printUsage();
+			}
+		}
 		
 		// Create and start iterations
-		createJob(conf, inputString, outputString);
+		Job job = createJob(conf, inputString, outputString, reduceTasks);
+		long startTime = System.currentTimeMillis();
+		if (job.waitForCompletion(true)) {
+			System.out.println("Finished in " + (System.currentTimeMillis() - startTime) / 1000.0 + " seconds");
+		}
 		return 0;
 	}
 	

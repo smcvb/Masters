@@ -235,9 +235,6 @@ public class OldInvertedIndex extends Configured implements Tool {
 	* @throws IOException for creating the job and setting the input path
 	*/
 	private Job createJob(Configuration conf, String inputPath, String outputPath, int reduceTasks) throws IOException {
-//		conf.set("io.sort.mb", "512"); // Configuration settings
-//		conf.set("mapred.child.java.opts", "-Xmx4096m");
-//		conf.set("mapred.task.timeout", "0");
 		conf.set("wiki.language", "en");
 		
 		Job job = new Job(conf, "Old Inverted Indexing"); // Main settings
