@@ -191,14 +191,23 @@ public class GraphParser extends Configured implements Tool {
 	
 	public static class Reduce extends Reducer<Text, Text, Text, LongArrayWritable> {
 		public void reduce(Text key, Iterable<Text> values, Context context) throws IOException, InterruptedException {
+			int i = 0;
+			LongWritable[] linksArray;
 			String linksList = values.iterator().next().toString();
-			System.out.println(linksList + "\n");
-			String[] links = linksList.replaceAll("\\s+", "-").split("-");
-			LongWritable[] linksArray = new LongWritable[links.length];
-			for(int i = 0; i < links.length; i++){
-				System.out.println(links[i]);
-				linksArray[i] = new LongWritable(Long.parseLong(links[i]));
+			String[] links = linksList.trim().replaceAll("\\s+", "-").split("-");
+			if(!links[0].equals("")){
+				linksArray = new LongWritable[links.length];
+			} else {
+				linksArray = new LongWritable[0];
 			}
+			
+			for(String link : links) {
+				if(!link.equals("")) {
+					linksArray[i] = new LongWritable(Long.parseLong(link));
+					i++;
+				}
+			}
+			
 			LongArrayWritable linksArrayWritable = new LongArrayWritable(LongWritable.class);
 			linksArrayWritable.set(linksArray);
 			context.write(key, linksArrayWritable);
