@@ -85,9 +85,13 @@ public class InvertedIndex extends Configured implements Tool {
 		 */
 		@Override
 		public void bsp(BSPPeer<TextLongPair, IntWritable, Text, TextIntPairArrayWritable, TextLongIntMessage> peer) throws IOException, InterruptedException, SyncException {
+			System.out.println(peer.getPeerName() + " | Start bsp, Start createTermFrequencies"); // TODO REMOVE
 			createTermFrequencies(peer);
+			System.out.println(peer.getPeerName() + " | Finished createTermFrequencies, start wait sync"); // TODO REMOVE
 			peer.sync();
+			System.out.println(peer.getPeerName() + " | AFTER sync, Start createPostingsList"); // TODO REMOVE
 			createPostingsList(peer);
+			System.out.println(peer.getPeerName() + " | Finished createPostingsList, Finished BSP"); // TODO REMOVE
 		}
 		
 		/**
@@ -101,24 +105,35 @@ public class InvertedIndex extends Configured implements Tool {
 			TextLongPair key = new TextLongPair();
 			IntWritable value = new IntWritable();
 			
+			System.out.println(peer.getPeerName() + " | createTermFrequencies BEFORE while"); // TODO REMOVE
 			while (peer.readNext(key, value)) { // Collect frequencies and send postings | One message is One WikipediaPage is One send
 				String term = "", contents = key.getTerm().toString();
 				long docid = key.getDocid().get();
 				String[] terms = contents.split("\\s+");
+				System.out.println(peer.getPeerName() + " | createTermFrequencies BEFORE picking terms for"); // TODO REMOVE
 				for (int i = 0; i < terms.length; i++) { // Pay load part | term frequency in this case
 					term = terms[i].toLowerCase().replaceAll("[^A-Za-z0-9]", "");
 					if (!term.equals("") && !stopwordSet.contains(term)) {
+						//System.out.println(peer.getPeerName() + " | createTermFrequencies IN picking terms for, BEFORE putting term"); // TODO REMOVE
 						postingTupleMap.put(term, postingTupleMap.containsKey(term) ? postingTupleMap.get(term) + 1 : 1);
+						//System.out.println(peer.getPeerName() + " | createTermFrequencies IN picking terms for, AFTER putting term"); // TODO REMOVE
 					}
 				}
+				System.out.println(peer.getPeerName() + " | createTermFrequencies AFTER picking terms for"); // TODO REMOVE
 				
+				System.out.println(peer.getPeerName() + " | createTermFrequencies BEFORE sending postings for"); // TODO REMOVE
 				for (Entry<String, Integer> entry : postingTupleMap.entrySet()) {
 					TextLongIntMessage tuple = new TextLongIntMessage(entry.getKey(), docid, entry.getValue());
 					String other = peer.getPeerName(Math.abs(tuple.getTerm().hashCode()) % peer.getNumPeers());
+					//System.out.println(peer.getPeerName() + " | createTermFrequencies IN sending postings for, BEFORE sending"); // TODO REMOVE
 					peer.send(other, tuple);
+					//System.out.println(peer.getPeerName() + " | createTermFrequencies IN sending postings for, AFTER sending"); // TODO REMOVE
 				}
+				System.out.println(peer.getPeerName() + " | createTermFrequencies AFTER sending postings for, clearing postingTupleMap"); // TODO REMOVE
 				postingTupleMap.clear(); // Empty memory
+				System.out.println(peer.getPeerName() + " | createTermFrequencies finished clearing postingTupleMap"); // TODO REMOVE
 			}
+			System.out.println(peer.getPeerName() + " | createTermFrequencies AFTER while"); // TODO REMOVE
 		}
 		
 		/**
@@ -130,6 +145,8 @@ public class InvertedIndex extends Configured implements Tool {
 		 */
 		private void createPostingsList(BSPPeer<TextLongPair, IntWritable, Text, TextIntPairArrayWritable, TextLongIntMessage> peer) throws IOException {
 			int totalMessages = peer.getNumCurrentMessages();
+			
+			System.out.println(peer.getPeerName() + " | createPostingsList BEFORE creating postings list for"); // TODO REMOVE
 			for (int i = 0; i < totalMessages; i++) {
 				TextLongIntMessage tuple = peer.getCurrentMessage();
 				
@@ -145,6 +162,7 @@ public class InvertedIndex extends Configured implements Tool {
 				postingsList.add(posting);
 				previousTerm = currentTerm;
 			}
+			System.out.println(peer.getPeerName() + " | createPostingsList AFTER creating postings list for"); // TODO REMOVE
 		}
 		
 		@Override
@@ -166,6 +184,7 @@ public class InvertedIndex extends Configured implements Tool {
 	 */
 	public static BSPJob createJob(HamaConfiguration conf, String inputPath, String outputPath, int tasks) throws IOException {
 		conf.set("wiki.language", "en");
+		conf.set("bsp.groomserver.pingperiod", "0");
 		conf.set(MessageManager.QUEUE_TYPE_CLASS, "org.apache.hama.bsp.message.queue.SortedMessageQueue"); // Internal Sorting as needed, hence sorted message queue
 		
 		BSPJob job = new BSPJob(conf, InvertedIndex.class); // Main settings

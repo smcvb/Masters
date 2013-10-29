@@ -1,4 +1,5 @@
 import java.io.IOException;
+import java.util.List;
 
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
@@ -8,17 +9,21 @@ import org.apache.hadoop.io.IntWritable;
 import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.NullWritable;
 import org.apache.hadoop.io.Text;
+import org.apache.hadoop.io.Writable;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
 import org.apache.hama.HamaConfiguration;
+import org.apache.hama.bsp.BSPPeer;
 import org.apache.hama.bsp.TextInputFormat;
 import org.apache.hama.bsp.TextOutputFormat;
 import org.apache.hama.graph.AbsDiffAggregator;
 import org.apache.hama.graph.Edge;
 import org.apache.hama.graph.GraphJob;
+import org.apache.hama.graph.GraphJobMessage;
 import org.apache.hama.graph.SumAggregator;
 import org.apache.hama.graph.Vertex;
 import org.apache.hama.graph.VertexInputReader;
+import org.apache.hama.graph.VertexOutputWriter;
 
 /**
  * Hadoop program to run the Pagerank algorithm as
@@ -109,6 +114,31 @@ public class Pagerank extends Configured implements Tool {
 		}
 	}
 	
+	public static class PageRankOutputWriter implements VertexOutputWriter<LongWritable, Text, LongWritable, NullWritable, DoubleWritable> {
+
+		@Override
+		public void setup(Configuration conf) {
+			// Unused
+		}
+
+		@Override
+		public void write(Vertex<LongWritable, NullWritable, DoubleWritable> vertice, BSPPeer<Writable, Writable, LongWritable, Text, GraphJobMessage> peer) throws IOException {
+			long docid = vertice.getVertexID().get();
+			double pagerank = vertice.getValue().get();
+			List<Edge<LongWritable, NullWritable>> edges = vertice.getEdges();
+			
+			StringBuilder sb = new StringBuilder(); // The stringbuilder to create the complete Text object for output
+			sb.append(pagerank);
+			sb.append("\t");
+			for (Edge<LongWritable, NullWritable> edge : edges) { // Append all edge document IDs to the string
+				sb.append(edge.getDestinationVertexID().toString());
+				sb.append("\t");
+			}
+			
+			peer.write(new LongWritable(docid), new Text(sb.toString()));
+		}
+	}
+	
 	public GraphJob createJob(HamaConfiguration conf, String inputPath, String outputPath) throws IOException {
 		conf.setBoolean("hama.check.missing.vertex", false); // A vertex may be missing (real world), hence check for this should not be performed
 		
@@ -128,6 +158,7 @@ public class Pagerank extends Configured implements Tool {
 		job.setVertexValueClass(DoubleWritable.class);
 		job.setEdgeValueClass(NullWritable.class);
 		job.setVertexInputReaderClass(PageRankTextReader.class);
+		job.setVertexOutputWriterClass(PageRankOutputWriter.class);
 		job.setAggregatorClass(SumAggregator.class, AbsDiffAggregator.class); // Aggregator settings
 		
 		return job;
