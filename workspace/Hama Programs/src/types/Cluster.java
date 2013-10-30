@@ -280,7 +280,7 @@ public class Cluster implements WritableComparable<Cluster> {
 		centroid.write(out);
 		int numberOfOutliers = outliers.length;
 		out.writeInt(numberOfOutliers);
-		System.out.println("index: " + index + " size: " + size + " dimensions: " + dimensions + " centroid: " + centroid.toString() + " numberOfOutliers: " + numberOfOutliers);
+		//System.out.println("index: " + index + " size: " + size + " dimensions: " + dimensions + " centroid: " + centroid.toString() + " numberOfOutliers: " + numberOfOutliers); // TODO REMOVE
 		for (int i = 0; i < numberOfOutliers; i++) {
 			outliers[i].write(out);
 		}

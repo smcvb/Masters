@@ -29,7 +29,7 @@ import org.apache.hama.graph.VertexOutputWriter;
  * Hadoop program to run the Pagerank algorithm as
  *  specified in 'Data-Intensive Text Processing with MapReduce'
  * @author stevenb
- * @date 02-09-2013
+ * @date 30-10-2013
  */
 public class Pagerank extends Configured implements Tool {
 	
@@ -49,11 +49,6 @@ public class Pagerank extends Configured implements Tool {
 		@Override
 		public void compute(Iterable<DoubleWritable> messages) throws IOException {
 			// Calculate new Pagerank
-			double pagerankMass = 0;
-			if (numEdges > 0) {
-				pagerankMass = getValue().get() / numEdges;
-			}
-			
 			if (getSuperstepCount() >= 1) {
 				double pagerank = 0.0, lostPagerankMassPart = 0.0, jump = 0.0, link = 0.0;
 				
@@ -76,14 +71,22 @@ public class Pagerank extends Configured implements Tool {
 				setValue(new DoubleWritable(pagerank));
 			}
 			
+			// Calculate mass to sent
+			double pagerankMass = 0;
+			if (numEdges > 0) {
+				pagerankMass = getValue().get() / numEdges;
+			}
+			
 			// Check whether finished and send Pagerank Mass if not
 			DoubleWritable lastAverage = getLastAggregatedValue(1); // Aggregator 1 averages all values send compared to the previous round | hence able to estimate convergence
 			if (getSuperstepCount() > getMaxIteration()) {
 				voteToHalt(); // Ran maximal number of iterations specified, hence halt
+				System.out.printf("Reached maximum amount of iterations with no convergence\n\n");
 				return;
 			}
 			else if (lastAverage != null && getSuperstepCount() > 2 && lastAverage.get() < CONVERGENCE_POINT) {
 				voteToHalt(); // Reached convergence, hence halt
+				System.out.printf("Convergence point has been reached in iteration %d\n\n", getSuperstepCount());
 				return;
 			}
 			sendMessageToNeighbors(new DoubleWritable(pagerankMass));

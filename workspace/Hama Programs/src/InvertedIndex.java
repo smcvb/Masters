@@ -102,6 +102,8 @@ public class InvertedIndex extends Configured implements Tool {
 		 * 		and sending messages to other peers
 		 */
 		private void createTermFrequencies(BSPPeer<TextLongPair, IntWritable, Text, TextIntPairArrayWritable, TextLongIntMessage> peer) throws IOException {
+			int counter = 0; // TODO REMOVE
+			long countKeeper = 0; // TODO REMOVE
 			TextLongPair key = new TextLongPair();
 			IntWritable value = new IntWritable();
 			
@@ -110,7 +112,7 @@ public class InvertedIndex extends Configured implements Tool {
 				String term = "", contents = key.getTerm().toString();
 				long docid = key.getDocid().get();
 				String[] terms = contents.split("\\s+");
-				System.out.println(peer.getPeerName() + " | createTermFrequencies BEFORE picking terms for"); // TODO REMOVE
+				//System.out.println(peer.getPeerName() + " | createTermFrequencies BEFORE picking terms for"); // TODO REMOVE
 				for (int i = 0; i < terms.length; i++) { // Pay load part | term frequency in this case
 					term = terms[i].toLowerCase().replaceAll("[^A-Za-z0-9]", "");
 					if (!term.equals("") && !stopwordSet.contains(term)) {
@@ -119,19 +121,25 @@ public class InvertedIndex extends Configured implements Tool {
 						//System.out.println(peer.getPeerName() + " | createTermFrequencies IN picking terms for, AFTER putting term"); // TODO REMOVE
 					}
 				}
-				System.out.println(peer.getPeerName() + " | createTermFrequencies AFTER picking terms for"); // TODO REMOVE
+				//System.out.println(peer.getPeerName() + " | createTermFrequencies AFTER picking terms for"); // TODO REMOVE
 				
-				System.out.println(peer.getPeerName() + " | createTermFrequencies BEFORE sending postings for"); // TODO REMOVE
+				//System.out.println(peer.getPeerName() + " | createTermFrequencies BEFORE sending postings for"); // TODO REMOVE
 				for (Entry<String, Integer> entry : postingTupleMap.entrySet()) {
 					TextLongIntMessage tuple = new TextLongIntMessage(entry.getKey(), docid, entry.getValue());
 					String other = peer.getPeerName(Math.abs(tuple.getTerm().hashCode()) % peer.getNumPeers());
 					//System.out.println(peer.getPeerName() + " | createTermFrequencies IN sending postings for, BEFORE sending"); // TODO REMOVE
 					peer.send(other, tuple);
+					counter++;
 					//System.out.println(peer.getPeerName() + " | createTermFrequencies IN sending postings for, AFTER sending"); // TODO REMOVE
 				}
-				System.out.println(peer.getPeerName() + " | createTermFrequencies AFTER sending postings for, clearing postingTupleMap"); // TODO REMOVE
+				//System.out.println(peer.getPeerName() + " | createTermFrequencies AFTER sending postings for, clearing postingTupleMap"); // TODO REMOVE
 				postingTupleMap.clear(); // Empty memory
-				System.out.println(peer.getPeerName() + " | createTermFrequencies finished clearing postingTupleMap"); // TODO REMOVE
+				//System.out.println(peer.getPeerName() + " | createTermFrequencies finished clearing postingTupleMap"); // TODO REMOVE
+				if(counter > 1000){ // TODO REMOVE
+					countKeeper += counter; // TODO REMOVE
+					counter = 0; // TODO REMOVE
+					System.out.println(peer.getPeerName() + " | have sent " + countKeeper + " messages"); // TODO REMOVE
+				} // TODO REMOVE
 			}
 			System.out.println(peer.getPeerName() + " | createTermFrequencies AFTER while"); // TODO REMOVE
 		}

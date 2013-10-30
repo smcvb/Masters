@@ -86,6 +86,10 @@ public class KMeans extends Configured implements Tool {
 		 */
 		private void initialize(BSPPeer<LongWritable, Text, IntWritable, Text, ClusterMessage> peer) throws IOException {
 			System.out.println(peer.getPeerName() + " | initialize |"); // TODO REMOVE
+			String[] peers = peer.getAllPeerNames(); // TODO REMOVE
+			for(String peertje : peers) { // TODO REMOVE
+				System.out.println(peertje); // TODO REMOVE
+			} // TODO REMOVE
 			LongWritable key = new LongWritable();
 			Text value = new Text();
 			String[] lines = null;
@@ -98,6 +102,7 @@ public class KMeans extends Configured implements Tool {
 					Cluster point = new Cluster(-1, -1, -1, new Point(lines[i]), new Point[0]);
 					ClusterMessage m = new ClusterMessage(POINT, point);
 					String name = peer.getPeerName(clusterIndex);
+					System.out.println(peer.getPeerName() + " | initialize | send to: " + name); // TODO REMOVE
 					peer.send(name, m);
 				}
 			}
@@ -116,12 +121,14 @@ public class KMeans extends Configured implements Tool {
 		 * @throws IOException from the getCurrentMessage() method.
 		 */
 		private boolean receiveMessages(BSPPeer<LongWritable, Text, IntWritable, Text, ClusterMessage> peer, ArrayList<Point> points, HashMap<String, Cluster> clusters) throws IOException {
-			System.out.println(peer.getPeerName() + " | receiveMessages |"); // TODO REMOVE
+			System.out.println(peer.getPeerName() + " | receiveMessages | num of messages received: " + peer.getNumCurrentMessages()); // TODO REMOVE
 			boolean converged = false;
 			ClusterMessage message;
 			HashMap<String, Cluster> newClusters = new HashMap<String, Cluster>(kmeans);
 			
+			int counter = 0; // TODO REMOVE
 			while ((message = peer.getCurrentMessage()) != null) {
+				counter++; // TODO REMOVE
 				String tag = message.getTag();
 				if (tag.equals(POINT)) { // Received a Point message
 					points.add(message.getCluster().getCentroid());
@@ -129,6 +136,7 @@ public class KMeans extends Configured implements Tool {
 					newClusters.put(tag, message.getCluster());
 				}
 			}
+			System.out.println(peer.getPeerName() + " | receiveMessages | counter = " + counter); // TODO REMOVE
 			
 			if (newClusters.size() > 0) { // Only if any clusters are received, can we check for convergence and set the new clusters
 				converged = checkConvergence(clusters, newClusters);
@@ -190,6 +198,7 @@ public class KMeans extends Configured implements Tool {
 			System.out.println(peer.getPeerName() + " | updateCluster |"); // TODO REMOVE
 			recalculateMean(peer, points); // set the new centroid of this peer
 			setOutliers(peer, points); // set the new outliers of this peer
+			System.out.println(peer.getPeerName() + " | updateCluster | 'me' contents after setting: " + me.toString()); // TODO REMOVE
 			broadcastClusterInfo(peer); // Send your cluster info around
 		}
 		
@@ -217,6 +226,8 @@ public class KMeans extends Configured implements Tool {
 			newCentroid.divide(size);
 			me.setSize(size); // set the size
 			me.setCentroid(newCentroid);
+			
+			System.out.println(peer.getPeerName() + " | recalculateMean |\nme.size: " + me.getSize() + " size: " + size + " me.dimensions: " + me.getDimensions() + " me.centroid: " + me.getCentroid().toString() + " centroid: " + newCentroid.toString()); // TODO REMOVE
 		}
 		
 		/**
@@ -251,6 +262,20 @@ public class KMeans extends Configured implements Tool {
 				outliers = Arrays.copyOf(newOutliers, newOutliers.length);
 			}
 			me.setOutliers(newOutliers);
+			
+			Point[] printliers = me.getOutliers(); // TODO REMOVE
+			for(int i = 0; i < newOutliers.length; i++){ // TODO REMOVE
+				if(printliers[i] != null) { // TODO REMOVE
+					System.out.println("[" + printliers[i].toString() + "] "); // TODO REMOVE
+				} else { // TODO REMOVE
+					System.out.println("[empty] "); // TODO REMOVE
+				} // TODO REMOVE
+				if(newOutliers[i] != null) { // TODO REMOVE
+					System.out.println("[" + newOutliers[i].toString() + "] "); // TODO REMOVE
+				} else { // TODO REMOVE
+					System.out.println("[empty] "); // TODO REMOVE
+				} // TODO REMOVE
+			} // TODO REMOVE
 		}
 		
 		/**
