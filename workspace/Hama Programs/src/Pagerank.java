@@ -80,13 +80,13 @@ public class Pagerank extends Configured implements Tool {
 			// Check whether finished and send Pagerank Mass if not
 			DoubleWritable lastAverage = getLastAggregatedValue(1); // Aggregator 1 averages all values send compared to the previous round | hence able to estimate convergence
 			if (getSuperstepCount() > getMaxIteration()) {
-				voteToHalt(); // Ran maximal number of iterations specified, hence halt
 				System.out.printf("Reached maximum amount of iterations with no convergence\n\n");
+				voteToHalt(); // Ran maximal number of iterations specified, hence halt
 				return;
 			}
 			else if (lastAverage != null && getSuperstepCount() > 2 && lastAverage.get() < CONVERGENCE_POINT) {
-				voteToHalt(); // Reached convergence, hence halt
 				System.out.printf("Convergence point has been reached in iteration %d\n\n", getSuperstepCount());
+				voteToHalt(); // Reached convergence, hence halt
 				return;
 			}
 			sendMessageToNeighbors(new DoubleWritable(pagerankMass));

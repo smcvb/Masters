@@ -60,6 +60,7 @@ public class KMeans extends Configured implements Tool {
 			
 			initialize(peer);
 			peer.sync();
+			System.out.println("Have received " + peer.getNumCurrentMessages() + " after sync"); //TODO REMOVE
 			while (!converged && round < iterations) {
 				if (round != 0) { // The first round accounts for initialization, hence first needs to calculate the mean.
 					assignPoints(peer, points, clusters);
