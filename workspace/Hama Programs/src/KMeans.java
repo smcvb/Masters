@@ -29,7 +29,7 @@ import types.Point;
 /**
  * Hama program to run the k-means algorithm
  * @author stevenb
- * @date 02-09-2013
+ * @date 04-11-2013
  */
 public class KMeans extends Configured implements Tool {
 	
@@ -60,7 +60,6 @@ public class KMeans extends Configured implements Tool {
 			
 			initialize(peer);
 			peer.sync();
-			System.out.println("Have received " + peer.getNumCurrentMessages() + " after sync"); //TODO REMOVE
 			while (!converged && round < iterations) {
 				if (round != 0) { // The first round accounts for initialization, hence first needs to calculate the mean.
 					assignPoints(peer, points, clusters);
@@ -86,11 +85,6 @@ public class KMeans extends Configured implements Tool {
 		 * @throws IOException from the readNext() and send() methods.
 		 */
 		private void initialize(BSPPeer<LongWritable, Text, IntWritable, Text, ClusterMessage> peer) throws IOException {
-			System.out.println(peer.getPeerName() + " | initialize |"); // TODO REMOVE
-			String[] peers = peer.getAllPeerNames(); // TODO REMOVE
-			for(String peertje : peers) { // TODO REMOVE
-				System.out.println(peertje); // TODO REMOVE
-			} // TODO REMOVE
 			LongWritable key = new LongWritable();
 			Text value = new Text();
 			String[] lines = null;
@@ -101,9 +95,8 @@ public class KMeans extends Configured implements Tool {
 				for (int i = 0; i < lines.length; i++) {
 					int clusterIndex = random.nextInt(kmeans);
 					Cluster point = new Cluster(-1, -1, -1, new Point(lines[i]), new Point[0]);
-					ClusterMessage m = new ClusterMessage(POINT, point);
+					final ClusterMessage m = new ClusterMessage(POINT, point);
 					String name = peer.getPeerName(clusterIndex);
-					System.out.println(peer.getPeerName() + " | initialize | send to: " + name); // TODO REMOVE
 					peer.send(name, m);
 				}
 			}
@@ -122,14 +115,11 @@ public class KMeans extends Configured implements Tool {
 		 * @throws IOException from the getCurrentMessage() method.
 		 */
 		private boolean receiveMessages(BSPPeer<LongWritable, Text, IntWritable, Text, ClusterMessage> peer, ArrayList<Point> points, HashMap<String, Cluster> clusters) throws IOException {
-			System.out.println(peer.getPeerName() + " | receiveMessages | num of messages received: " + peer.getNumCurrentMessages()); // TODO REMOVE
 			boolean converged = false;
 			ClusterMessage message;
 			HashMap<String, Cluster> newClusters = new HashMap<String, Cluster>(kmeans);
 			
-			int counter = 0; // TODO REMOVE
 			while ((message = peer.getCurrentMessage()) != null) {
-				counter++; // TODO REMOVE
 				String tag = message.getTag();
 				if (tag.equals(POINT)) { // Received a Point message
 					points.add(message.getCluster().getCentroid());
@@ -137,7 +127,6 @@ public class KMeans extends Configured implements Tool {
 					newClusters.put(tag, message.getCluster());
 				}
 			}
-			System.out.println(peer.getPeerName() + " | receiveMessages | counter = " + counter); // TODO REMOVE
 			
 			if (newClusters.size() > 0) { // Only if any clusters are received, can we check for convergence and set the new clusters
 				converged = checkConvergence(clusters, newClusters);
@@ -159,7 +148,6 @@ public class KMeans extends Configured implements Tool {
 		 * @throws IOException from the send() method
 		 */
 		private void assignPoints(BSPPeer<LongWritable, Text, IntWritable, Text, ClusterMessage> peer, ArrayList<Point> points, HashMap<String, Cluster> clusters) throws IOException {
-			System.out.println(peer.getPeerName() + " | assignPoints |"); // TODO REMOVE
 			Iterator<Point> pointsIterator = points.iterator();
 			
 			while (pointsIterator.hasNext()) {
@@ -196,10 +184,8 @@ public class KMeans extends Configured implements Tool {
 		 *  broadcastClusterInfo() methods.
 		 */
 		private void updateCluster(BSPPeer<LongWritable, Text, IntWritable, Text, ClusterMessage> peer, ArrayList<Point> points) throws IOException {
-			System.out.println(peer.getPeerName() + " | updateCluster |"); // TODO REMOVE
 			recalculateMean(peer, points); // set the new centroid of this peer
 			setOutliers(peer, points); // set the new outliers of this peer
-			System.out.println(peer.getPeerName() + " | updateCluster | 'me' contents after setting: " + me.toString()); // TODO REMOVE
 			broadcastClusterInfo(peer); // Send your cluster info around
 		}
 		
@@ -211,7 +197,6 @@ public class KMeans extends Configured implements Tool {
 		 * @throws IOException from the broadcastClusterInfo() method
 		 */
 		private void recalculateMean(BSPPeer<LongWritable, Text, IntWritable, Text, ClusterMessage> peer, ArrayList<Point> points) throws IOException {
-			System.out.println(peer.getPeerName() + " | recalculateMean |"); // TODO REMOVE
 			int size = 0;
 			Point newCentroid = new Point();
 			
@@ -227,8 +212,6 @@ public class KMeans extends Configured implements Tool {
 			newCentroid.divide(size);
 			me.setSize(size); // set the size
 			me.setCentroid(newCentroid);
-			
-			System.out.println(peer.getPeerName() + " | recalculateMean |\nme.size: " + me.getSize() + " size: " + size + " me.dimensions: " + me.getDimensions() + " me.centroid: " + me.getCentroid().toString() + " centroid: " + newCentroid.toString()); // TODO REMOVE
 		}
 		
 		/**
@@ -241,9 +224,13 @@ public class KMeans extends Configured implements Tool {
 		 * @throws IOException from the broadcastOutliers() method.
 		 */
 		private void setOutliers(BSPPeer<LongWritable, Text, IntWritable, Text, ClusterMessage> peer, ArrayList<Point> points) throws IOException {
-			System.out.println(peer.getPeerName() + " | setOutliers |"); // TODO REMOVE
 			Point centroid = me.getCentroid();
-			Point[] outliers = new Point[kmeans - 1];
+			Point[] outliers;
+			if (points.size() < kmeans - 1) {
+				outliers = new Point[points.size()];
+			} else {
+				outliers = new Point[kmeans - 1];
+			}
 			Point[] newOutliers = new Point[outliers.length];
 			
 			for (Point point : points) {
@@ -263,20 +250,6 @@ public class KMeans extends Configured implements Tool {
 				outliers = Arrays.copyOf(newOutliers, newOutliers.length);
 			}
 			me.setOutliers(newOutliers);
-			
-			Point[] printliers = me.getOutliers(); // TODO REMOVE
-			for(int i = 0; i < newOutliers.length; i++){ // TODO REMOVE
-				if(printliers[i] != null) { // TODO REMOVE
-					System.out.println("[" + printliers[i].toString() + "] "); // TODO REMOVE
-				} else { // TODO REMOVE
-					System.out.println("[empty] "); // TODO REMOVE
-				} // TODO REMOVE
-				if(newOutliers[i] != null) { // TODO REMOVE
-					System.out.println("[" + newOutliers[i].toString() + "] "); // TODO REMOVE
-				} else { // TODO REMOVE
-					System.out.println("[empty] "); // TODO REMOVE
-				} // TODO REMOVE
-			} // TODO REMOVE
 		}
 		
 		/**
@@ -287,7 +260,6 @@ public class KMeans extends Configured implements Tool {
 		 * @throws IOException from the send() method
 		 */
 		private void broadcastClusterInfo(BSPPeer<LongWritable, Text, IntWritable, Text, ClusterMessage> peer) throws IOException {
-			System.out.println(peer.getPeerName() + " | broadcastClusterInfo | sending " + me.toString()); // TODO REMOVE
 			String[] clusterNames = peer.getAllPeerNames();
 			for (String clusterName : clusterNames) {
 				final ClusterMessage m = new ClusterMessage(peer.getPeerName(), new Cluster(me));
@@ -305,7 +277,6 @@ public class KMeans extends Configured implements Tool {
 		 *  in case it did not.
 		 */
 		private boolean checkConvergence(HashMap<String, Cluster> clusters, HashMap<String, Cluster> newClusters) {
-			System.out.println("| checkConvergence |"); // TODO REMOVE
 			if (clusters.size() != newClusters.size()) { // if the sizes do not equal, 'clusters' was smaller than kmeans the previous round; hence no convergence
 				return false;
 			}
@@ -328,7 +299,6 @@ public class KMeans extends Configured implements Tool {
 		 * @param newClusters: a HashMap containing the new clusters.
 		 */
 		private void setNewClusters(String peerName, HashMap<String, Cluster> clusters, HashMap<String, Cluster> newClusters) {
-			System.out.println("| setNewClusters |"); // TODO REMOVE
 			int emptyClusters = 0;
 			
 			for (Entry<String, Cluster> entry : newClusters.entrySet()) {
@@ -356,7 +326,6 @@ public class KMeans extends Configured implements Tool {
 		 *  empty clusters found and thus empty cluster indexes to look for.
 		 */
 		private void selectNewClusters(String peerName, HashMap<String, Cluster> clusters, int numEmptyClusters) {
-			System.out.println("| selectNewClusters |"); // TODO REMOVE
 			int i = 0;
 			String[] emptyClusterNames = new String[numEmptyClusters];
 			Cluster largestCluster = new Cluster();
@@ -397,7 +366,6 @@ public class KMeans extends Configured implements Tool {
 		 * @throws IOException from the write method.
 		 */
 		public void writeOutput(BSPPeer<LongWritable, Text, IntWritable, Text, ClusterMessage> peer, ArrayList<Point> points, HashMap<String, Cluster> clusters, boolean converged) throws IOException { // Close
-			System.out.println(peer.getPeerName() + " | writeOutput |"); // TODO REMOVE
 			if (peer.getPeerIndex() == 0 && converged) {
 				System.out.printf("\n\nClusters Converged in Iteration %d\n\n", round);
 				for (Entry<String, Cluster> entry : clusters.entrySet()) {

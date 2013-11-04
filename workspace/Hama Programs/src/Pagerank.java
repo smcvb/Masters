@@ -26,7 +26,7 @@ import org.apache.hama.graph.VertexInputReader;
 import org.apache.hama.graph.VertexOutputWriter;
 
 /**
- * Hadoop program to run the Pagerank algorithm as
+ * Hama program to run the Pagerank algorithm as
  *  specified in 'Data-Intensive Text Processing with MapReduce'
  * @author stevenb
  * @date 30-10-2013
@@ -77,7 +77,7 @@ public class Pagerank extends Configured implements Tool {
 				pagerankMass = getValue().get() / numEdges;
 			}
 			
-			// Check whether finished and send Pagerank Mass if not
+			// Check whether finished. Send Pagerank Mass if not
 			DoubleWritable lastAverage = getLastAggregatedValue(1); // Aggregator 1 averages all values send compared to the previous round | hence able to estimate convergence
 			if (getSuperstepCount() > getMaxIteration()) {
 				System.out.printf("Reached maximum amount of iterations with no convergence\n\n");

@@ -11,7 +11,7 @@ import org.apache.hadoop.io.WritableComparable;
  * A Writable object to hold a cluster for
  *  the k-means algorithm
  * @author stevenb
- * @date 02-09-2013
+ * @date 04-11-2013
  */
 public class Cluster implements WritableComparable<Cluster> {
 	
@@ -264,10 +264,12 @@ public class Cluster implements WritableComparable<Cluster> {
 		index = in.readInt();
 		size = in.readInt();
 		dimensions = in.readInt();
+		centroid = new Point();
 		centroid.readFields(in);
 		int numberOfOutliers = in.readInt();
 		outliers = new Point[numberOfOutliers];
 		for (int i = 0; i < numberOfOutliers; i++) {
+			outliers[i] = new Point();
 			outliers[i].readFields(in);
 		}
 	}
@@ -280,7 +282,6 @@ public class Cluster implements WritableComparable<Cluster> {
 		centroid.write(out);
 		int numberOfOutliers = outliers.length;
 		out.writeInt(numberOfOutliers);
-		//System.out.println("index: " + index + " size: " + size + " dimensions: " + dimensions + " centroid: " + centroid.toString() + " numberOfOutliers: " + numberOfOutliers); // TODO REMOVE
 		for (int i = 0; i < numberOfOutliers; i++) {
 			outliers[i].write(out);
 		}

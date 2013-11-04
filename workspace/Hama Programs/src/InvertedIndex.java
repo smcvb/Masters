@@ -193,7 +193,7 @@ public class InvertedIndex extends Configured implements Tool {
 	public static BSPJob createJob(HamaConfiguration conf, String inputPath, String outputPath, int tasks) throws IOException {
 		conf.set("wiki.language", "en");
 		conf.set("bsp.groomserver.pingperiod", "0");
-		conf.set("hama.zookeeper.session.timeout", "0");
+		//conf.set("hama.zookeeper.session.timeout", "0");
 		conf.set("hama.zookeeper.property.tickTime", "3000000");
 		conf.set(MessageManager.QUEUE_TYPE_CLASS, "org.apache.hama.bsp.message.queue.SortedMessageQueue"); // Internal Sorting as needed, hence sorted message queue
 		
