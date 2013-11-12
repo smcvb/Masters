@@ -15,16 +15,49 @@ public class ParseCities {
 		cities = new ArrayList<String>();
 	}
 	
-	public void run(String[] args) throws IOException {
-		int countries = 0;
-		String input = "", output = "", line = "", previousCountry = "";
-		if (args.length < 2) {
-			System.err.println("Error: to few arguments given");
-			System.exit(0);
-		}
-		input = args[0];
-		output = args[1];
+	private void toOneFile(String input, String output) throws IOException{
+		String line = "";
+		BufferedReader br = new BufferedReader(new FileReader(input));
 		
+		while ((line = br.readLine()) != null) {
+			String[] terms = line.split("\\s+");
+			if(terms.length > 4){
+				StringBuilder b = new StringBuilder();
+				b.append(terms[0]);
+				b.append(" ");
+				b.append(terms[1]);
+				b.append(" ");
+				for(int i = 2; i < terms.length - 2; i++){
+					b.append(terms[i]);
+					b.append("_");
+				}
+				b.append(terms[terms.length - 2]);
+				b.append(" ");
+				b.append(terms[terms.length - 1]);
+				
+				cities.add(b.toString());
+			} else {
+				cities.add(line);
+			}
+		}
+		br.close();
+		
+		System.out.printf("\nGoing to write the changed input set to a new file called %s\n", String.format("%s", output));
+		
+		//Writing to file
+		File file = new File(output);
+		BufferedWriter bw = new BufferedWriter(new FileWriter(file));
+		Iterator<String> cityIterator = cities.iterator();
+		while (cityIterator.hasNext()) {
+			bw.write(String.format("%s\n", cityIterator.next()));
+		}
+		bw.close();
+		cities.clear();
+	}
+	
+	private void toMultipleFiles(String input, String output) throws IOException{
+		int countries = 0;
+		String line = "", previousCountry = "";
 		BufferedReader br = new BufferedReader(new FileReader(input));
 		while ((line = br.readLine()) != null) {
 			String[] terms = line.split("\\s+");
@@ -91,6 +124,20 @@ public class ParseCities {
 			}
 		}
 		br.close();
+	}
+	
+	public void run(String[] args) throws IOException {
+		if (args.length < 2) {
+			System.err.println("Error: to few arguments given");
+			System.err.println("Usages: ParseCities [input] [output] [optionel: output to one file]");
+			System.exit(0);
+		}
+		
+		if(args.length > 2 && args[2].equals("oneFile")){
+			toOneFile(args[0], args[1]);
+		} else {
+			toMultipleFiles(args[0], args[1]);
+		}
 	}
 	
 	public static void main(String[] args) {
