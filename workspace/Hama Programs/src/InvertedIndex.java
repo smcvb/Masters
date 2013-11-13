@@ -113,7 +113,7 @@ public class InvertedIndex extends Configured implements Tool {
 				}
 				
 				for (Entry<String, Integer> entry : postingTupleMap.entrySet()) {
-					TextLongIntMessage tuple = new TextLongIntMessage(entry.getKey(), docid, entry.getValue());
+					final TextLongIntMessage tuple = new TextLongIntMessage(entry.getKey(), docid, entry.getValue());
 					String other = peer.getPeerName(Math.abs(tuple.getTerm().hashCode()) % peer.getNumPeers());
 					peer.send(other, tuple);
 				}
