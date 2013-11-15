@@ -86,7 +86,7 @@ public class SeparatePages extends Configured implements Tool {
 	public int run(String[] args) throws Exception {
 		int reduceTasks = 0; //If no [reducers] parameter is given, the number of output partitions will equal the number of input partitions.
 		String inputString = "", outputString = "";
-		Configuration conf = new Configuration();
+		Configuration conf = new Configuration(getConf());
 		
 		// Set arguments
 		if (args.length < 2) {
