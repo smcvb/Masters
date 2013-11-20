@@ -8,7 +8,6 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.conf.Configured;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.io.IntWritable;
-import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
 import org.apache.hadoop.util.Tool;
 import org.apache.hadoop.util.ToolRunner;
@@ -167,7 +166,6 @@ public class InvertedIndex extends Configured implements Tool {
 	 */
 	public static BSPJob createJob(HamaConfiguration conf, String inputPath, String outputPath, int tasks) throws IOException {
 		conf.set("wiki.language", "en");
-		conf.set("bsp.child.java.opts", "-Xmx4096m");
 		conf.set(MessageManager.QUEUE_TYPE_CLASS, "org.apache.hama.bsp.message.queue.SortedMessageQueue"); // Internal Sorting as needed, hence sorted message queue
 		
 		BSPJob job = new BSPJob(conf, InvertedIndex.class); // Main settings
