@@ -98,7 +98,7 @@ public class Pagerank extends Configured implements Tool {
 		@Override
 		public boolean parseVertex(LongWritable key, Text value, Vertex<LongWritable, NullWritable, DoubleWritable> vertex) throws Exception {
 			String[] vertices = value.toString().split("\n");
-			LongWritable vertexID = new LongWritable(), vertexNeighbor = new LongWritable();
+			LongWritable vertexID = new LongWritable();
 			DoubleWritable vertexValue = new DoubleWritable();
 			
 			for (String vertice : vertices) {
@@ -109,7 +109,7 @@ public class Pagerank extends Configured implements Tool {
 				vertexValue.set(Double.parseDouble(vertexInfo[1]));
 				vertex.setValue(vertexValue);
 				for (int j = 2; j < vertexInfo.length; j++) { // Add all the neighbors in the list to the node with their edges
-					vertexNeighbor.set(Long.parseLong(vertexInfo[j]));
+					LongWritable vertexNeighbor = new LongWritable(Long.parseLong(vertexInfo[j]));
 					vertex.addEdge(new Edge<LongWritable, NullWritable>(vertexNeighbor, null));
 				}
 			}
