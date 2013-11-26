@@ -70,7 +70,7 @@ public class InvertedIndex extends Configured implements Tool {
 				stopwordSet.add(stopword);
 			}
 			postingTupleMap = new HashMap<String, Integer>();
-			invertedIndex = new HashMap<String, ArrayList<TextIntPair>>();
+			invertedIndex = new HashMap<String, ArrayList<TextIntPair>>(3053334); //3053334 is the optimal HashMap size in case 12 nodes perform this algorithm on the Wikipedia dump
 			writablePostings = new TextIntPairArrayWritable(TextIntPair.class);
 		}
 		
@@ -182,6 +182,7 @@ public class InvertedIndex extends Configured implements Tool {
 	 * @throws IOException for creating the BSP job Object
 	 */
 	public static BSPJob createJob(HamaConfiguration conf, String inputPath, String outputPath, int tasks, int maxPagesParsed) throws IOException {
+		conf.set("bsp.child.java.opts", "-Xmx10240m");
 		conf.set("wiki.language", "en");
 		conf.setInt("maxPagesParsed", maxPagesParsed);
 		conf.set(MessageManager.QUEUE_TYPE_CLASS, "org.apache.hama.bsp.message.queue.SortedMessageQueue"); // Internal Sorting as needed, hence sorted message queue
